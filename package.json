@@ -56,6 +56,8 @@
     "test:watch": "vitest",
     "verify": "pnpm run build && pnpm run test",
     "build:binary": "scripts/build-binary.sh",
+    "macos:test": "macos/scripts/test.sh",
+    "macos:build": "macos/scripts/bundle.sh",
     "prepublishOnly": "pnpm verify"
   },
   "dependencies": {
