@@ -94,8 +94,8 @@ describe("ModelRequestsScreen", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("[Requests]");
     expect(frame).toContain("tok/s");
-    expect(frame).toContain("300.0");
-    expect(frame).toContain("120.0k");
+    expect(frame).toContain("300");
+    expect(frame).toContain("120k");
     expect(frame).toContain("after your prompt");
   });
 
@@ -106,9 +106,9 @@ describe("ModelRequestsScreen", () => {
     expect(lastFrame() ?? "").toContain("stalled");
   });
 
-  it("switches to the rollups with the right arrow", async () => {
+  it("switches to the rollups on 'v', leaving the arrows to the tab strip", async () => {
     const { lastFrame, stdin } = renderRequests(makeBreakdown());
-    stdin.write("[C");
+    stdin.write("v");
     await tick();
     const frame = lastFrame() ?? "";
     expect(frame).toContain("By what handed control back");
@@ -192,7 +192,7 @@ describe("ModelRequestDetailScreen", () => {
     expect(frame).toContain("First block");
     expect(frame).toContain("reading the prompt back in");
     expect(frame).toContain("Later blocks");
-    expect(frame).toContain("300.0 tok/s");
+    expect(frame).toContain("300 tok/s");
     expect(frame).toContain("a short reply");
   });
 

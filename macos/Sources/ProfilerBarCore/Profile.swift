@@ -21,10 +21,21 @@ public struct Profile: Decodable, Equatable, Sendable {
     public let prompts: [PromptPoint]
     public let hooks: HookInsights?
     public let phases: PhaseSplit?
+    public let diagnostics: Diagnostics?
 
     public struct Generator: Decodable, Equatable, Sendable {
         public let name: String
         public let version: String
+    }
+
+    /// What the parser could not account for. The terminal UI reports the
+    /// unmatched tool calls inside its Unaccounted breakdown; the rest is here
+    /// so both can say the same thing about a truncated transcript.
+    public struct Diagnostics: Decodable, Equatable, Sendable {
+        public let skippedLines: Int
+        public let unknownRecordTypes: [String: Int]
+        public let unmatchedToolUses: Int
+        public let versionsSeen: [String]
     }
 }
 
@@ -173,6 +184,10 @@ public struct ModelRequest: Decodable, Equatable, Sendable, Identifiable {
     /// "api_error" / "stalled", or nil for a healthy request.
     public let suspect: String?
     public let preview: String
+    /// The same text as `preview`, capped much higher, for the detail pane.
+    public let full: String?
+    /// When control actually passed to the model, epoch ms.
+    public let startMs: Double?
 
     public var id: String { key }
 
@@ -312,13 +327,22 @@ public struct HookInsights: Decodable, Equatable, Sendable {
     public let callsWithTiming: Int
     public let approval: Approval
     public let reliability: Reliability
-    public let parallelism: Parallelism
-    public let contextPollution: ContextPollution
+    /// Null on a session whose sidecar recorded no batches — decoding these as
+    /// non-optional failed the whole profile rather than hiding one panel.
+    public let parallelism: Parallelism?
+    public let contextPollution: ContextPollution?
     public let lifecycle: Lifecycle
     public let cacheWaste: CacheWaste?
+    public let compaction: Compaction?
     public let turns: [Turn]?
+    public let commands: [CommandCost]?
+    public let instructions: Instructions?
+    public let streaming: Streaming?
+    public let subagents: [SubagentSpan]?
 
     public struct Approval: Decodable, Equatable, Sendable {
+        /// "split" once PermissionRequest exists; "unsplit" for a v1 sidecar,
+        /// which cannot tell your decision from the profiler's own overhead.
         public let precision: String
         public let decisionMs: Double?
         public let overheadMs: Double?
@@ -378,6 +402,12 @@ public struct HookInsights: Decodable, Equatable, Sendable {
         public let endReason: String?
         public let idleMs: Double
         public let turnsWaitingOnBackground: Int?
+        public let turnEnds: Int?
+        public let humanPrompts: Int?
+        public let machinePrompts: Int?
+        /// Counts by `UserPromptSubmit.source`: "user", and whatever injected
+        /// the rest.
+        public let promptSources: [String: Int]?
 
         public struct Start: Decodable, Equatable, Sendable {
             public let at: String
@@ -388,6 +418,14 @@ public struct HookInsights: Decodable, Equatable, Sendable {
             public let cacheLikelyExpired: Bool?
             public let cacheWriteUsd: Double?
         }
+
+        /// Everything but "user", which is the person typing.
+        public var injectedSources: [(key: String, count: Int)] {
+            (promptSources ?? [:])
+                .filter { $0.key != "user" }
+                .sorted { $0.value > $1.value }
+                .map { (key: $0.key, count: $0.value) }
+        }
     }
 
     public struct CacheWaste: Decodable, Equatable, Sendable {
@@ -397,15 +435,71 @@ public struct HookInsights: Decodable, Equatable, Sendable {
         public let resumes: Int
         public let modelSwitches: Int
         public let switchesForfeitingWarmCache: Int
+        /// How CC priced the estimates: "configured" | "catalog" | "default".
+        public let pricing: [String]?
+    }
+
+    public struct Compaction: Decodable, Equatable, Sendable {
+        public let count: Int
+        public let autoCount: Int
+        public let manualCount: Int
+        public let totalMs: Double?
+        public let summaryBytes: Double?
     }
 
     public struct Turn: Decodable, Equatable, Sendable {
         public let promptId: String
+        public let source: String?
+        public let commandName: String?
         public let toolCalls: Int
         public let toolExecMs: Double
         public let decisionMs: Double?
         public let failedCalls: Int
         public let responseBytes: Double?
         public let effort: String?
+    }
+
+    /// Tool execution time attributed to one slash command or MCP prompt.
+    public struct CommandCost: Decodable, Equatable, Sendable, Identifiable {
+        public let commandName: String
+        public let runs: Int
+        public let toolCalls: Int
+        public let toolExecMs: Double
+
+        public var id: String { commandName }
+    }
+
+    public struct Instructions: Decodable, Equatable, Sendable {
+        public let files: [File]
+        public let totalLoads: Int
+
+        public struct File: Decodable, Equatable, Sendable, Identifiable {
+            public let filePath: String
+            public let memoryType: String?
+            public let loadReason: String?
+            public let loads: Int
+
+            public var id: String { filePath }
+        }
+    }
+
+    public struct Streaming: Decodable, Equatable, Sendable {
+        public let messages: Int
+        /// First → last visible flush, median across messages.
+        public let medianStreamMs: Double
+        public let p90StreamMs: Double
+        public let totalDeltaBytes: Double
+        public let incompleteMessages: Int?
+    }
+
+    public struct SubagentSpan: Decodable, Equatable, Sendable, Identifiable {
+        public let subagentId: String
+        public let subagentType: String?
+        public let transcriptPath: String?
+        public let spanMs: Double?
+        public let toolCalls: Int
+        public let toolExecMs: Double
+
+        public var id: String { subagentId }
     }
 }

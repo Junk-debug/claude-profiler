@@ -1,5 +1,9 @@
 import Foundation
 
+/// Every rule here has a twin in `src/tui/format.ts`, and the two test suites
+/// assert the same cases: the CLI and this app render the same profile
+/// artifact, so a figure that reads "1m 20s" in one and "1m20s" in the other
+/// is the same number pretending to be two.
 public enum Format {
     /// 950 → "950", 88_295 → "88k", 1_576_617 → "1.6M".
     public static func tokens(_ value: Int) -> String {
@@ -48,11 +52,32 @@ public enum Format {
         return duration(seconds: Double(seconds))
     }
 
-    /// 820 → "820 B", 819_043 → "800 KB", 5_400_000 → "5.2 MB".
+    /// The same, for the artifact fields that report an unmeasurable span as
+    /// null rather than as zero.
+    public static func ms(_ value: Double?) -> String {
+        value.map(ms) ?? "—"
+    }
+
+    /// Output tokens per second. A decimal only where it separates a stall
+    /// from a crawl (under ten), none above it, where three digits of
+    /// precision on a rate that swings by 50% between requests is false
+    /// confidence: 0.2 → "0.2", 118.34 → "118".
+    public static func rate(_ tokensPerSec: Double?) -> String {
+        guard let tokensPerSec, tokensPerSec.isFinite else { return "—" }
+        return String(format: tokensPerSec >= 10 ? "%.0f" : "%.1f", tokensPerSec)
+    }
+
+    /// Binary units, named as such: 820 → "820 B", 819_043 → "800 KiB",
+    /// 5_400_000 → "5.1 MiB".
     public static func bytes(_ value: Double) -> String {
         if value < 1_024 { return "\(Int(value.rounded())) B" }
-        if value < 1_024 * 1_024 { return "\(Int((value / 1_024).rounded())) KB" }
-        return String(format: "%.1f MB", value / (1_024 * 1_024))
+        if value < 1_024 * 1_024 { return "\(Int((value / 1_024).rounded())) KiB" }
+        return String(format: "%.1f MiB", value / (1_024 * 1_024))
+    }
+
+    /// The same, for the artifact fields that report an unknown size as null.
+    public static func bytes(_ value: Double?) -> String {
+        value.map(bytes) ?? "—"
     }
 
     /// Takes a ratio, the way every `pct…` field in the profile artifact is
@@ -62,8 +87,33 @@ public enum Format {
         return value >= 10 ? String(format: "%.0f%%", value) : String(format: "%.1f%%", value)
     }
 
+    /// Money. Cents for anything a person would recognise as a price, four
+    /// decimals below a cent — `cacheWaste` reports real amounts that round to
+    /// $0.00 and would otherwise read as free.
     public static func usd(_ value: Double) -> String {
-        String(format: value < 10 ? "$%.2f" : "$%.0f", value)
+        if value > 0, value < 0.01 { return String(format: "$%.4f", value) }
+        return String(format: "$%.2f", value)
+    }
+
+    /// The same, for the many artifact fields that report an absent amount as
+    /// null rather than as zero.
+    public static func usd(_ value: Double?) -> String {
+        value.map(usd) ?? "—"
+    }
+
+    /// Local wall-clock, not UTC: "2026-01-02 03:04". A timestamp the reader is
+    /// meant to recognise as "when I was at my desk" has to be in the clock
+    /// they were reading at the time.
+    public static func dateTime(_ iso: String?) -> String {
+        guard let iso, let date = ISO8601DateFormatter.parser.dateOrPlain(from: iso) else { return "—" }
+        return DateFormatter.stamp.string(from: date)
+    }
+
+    /// "21:16:05", for table rows inside one session, where every line carries
+    /// the same date.
+    public static func clock(_ iso: String?) -> String {
+        guard let iso, let date = ISO8601DateFormatter.parser.dateOrPlain(from: iso) else { return "—" }
+        return DateFormatter.clock.string(from: date)
     }
 
     /// "claude-opus-5" → "Opus 5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5".
@@ -77,4 +127,39 @@ public enum Format {
         let name = family.prefix(1).uppercased() + family.dropFirst()
         return version.isEmpty ? name : "\(name) \(version)"
     }
+}
+
+public extension ISO8601DateFormatter {
+    /// The artifact writes `toISOString()`, which always carries milliseconds,
+    /// but hook payloads and CC's own records do not always agree — so a
+    /// timestamp without them parses too rather than rendering as "—".
+    static let parser: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static let plainParser: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    func dateOrPlain(from iso: String) -> Date? {
+        date(from: iso) ?? ISO8601DateFormatter.plainParser.date(from: iso)
+    }
+}
+
+public extension DateFormatter {
+    static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    static let stamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter
+    }()
 }

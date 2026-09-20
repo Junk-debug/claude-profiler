@@ -1,8 +1,9 @@
 import { Box, Text, useApp, useInput } from "ink";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Profile } from "../artifact/profile.js";
 import { getTabs, useNavStack, type Tab } from "./shell.js";
-import { formatCostUSD, formatDateTime, formatMs } from "./format.js";
+import { formatCount, formatDateTime, formatModels, formatMs, formatUsd } from "./format.js";
+import { bucketTotal } from "../metrics/tokens.js";
 // Registers the "overview" tab as an import side effect (T13 step 1). T14/T15
 // add their own tab files here (or wherever App.tsx imports from) so `getTabs()`
 // sees them too — neither ever needs to edit this file's JSX.
@@ -11,8 +12,7 @@ import "./Overview.js";
 interface TabHostProps {
   tab: Tab;
   profile: Profile;
-  /** Reported on every depth change so App can tell whether ←→ should cycle tabs or leave it to the drilled-into screen. */
-  onDepthChange: (depth: number) => void;
+  selectTab: (id: string) => void;
 }
 
 const HEADER_LABEL_WIDTH = 9;
@@ -23,23 +23,42 @@ function HeaderRow({ label, value }: { label: string; value: string }): React.JS
       <Box width={HEADER_LABEL_WIDTH}>
         <Text dimColor>{label}</Text>
       </Box>
-      <Text>{value}</Text>
+      <Text wrap="truncate-end">{value}</Text>
     </Box>
   );
 }
 
-/** The session summary shown above every tab, not just Overview — it's the orienting context the rest of the tabs assume the user already has. */
+/**
+ * The session summary shown above every tab, not just Overview — it's the
+ * orienting context the rest of the tabs assume the user already has.
+ *
+ * The same fields, in the same order, as the menu bar app's own detail header
+ * (SessionDetailView.swift): what this session was, when it ran, and what it
+ * cost. Packed onto five lines rather than one row per field — the app can
+ * afford a strip of tiles, a terminal cannot afford ten rows above every tab.
+ */
 function Header({ profile }: { profile: Profile }): React.JSX.Element {
-  const { session, cost, timeline } = profile;
+  const { session, cost, timeline, modelBreakdown, tokens } = profile;
+  const requests = modelBreakdown.coverage.totalRequests;
+  const ran = [
+    formatDateTime(session.startedAt),
+    `span ${formatMs(timeline.spanMs)}`,
+    `${session.turnCount} turn${session.turnCount === 1 ? "" : "s"}`,
+    `${formatCount(requests)} request${requests === 1 ? "" : "s"}`,
+  ].join(" · ");
+  const usage = [
+    `${formatCount(bucketTotal(tokens.totals))} tokens`,
+    cost ? formatUsd(cost.totalCostUSD) : "cost —",
+    formatModels(session.models),
+  ].join(" · ");
+
   return (
     <Box flexDirection="column" marginBottom={1}>
+      <Text bold>{session.title ?? session.sessionId}</Text>
       <HeaderRow label="Session" value={session.sessionId} />
       <HeaderRow label="Project" value={session.projectPath ?? "(unknown project)"} />
-      <HeaderRow label="Started" value={formatDateTime(session.startedAt)} />
-      <HeaderRow label="Span" value={formatMs(timeline.spanMs)} />
-      <HeaderRow label="Cost" value={cost ? formatCostUSD(cost.totalCostUSD) : "—"} />
-      <HeaderRow label="Models" value={session.models.length > 0 ? session.models.join(", ") : "(unknown model)"} />
-      <HeaderRow label="Turns" value={String(session.turnCount)} />
+      <HeaderRow label="Ran" value={ran} />
+      <HeaderRow label="Usage" value={usage} />
     </Box>
   );
 }
@@ -100,12 +119,8 @@ function ToolTimingCaveat({
  * each tab gets a fresh nav stack — drilling back out on `Esc` only needs to
  * restore state within a tab, not across a tab switch.
  */
-function TabHost({ tab, profile, onDepthChange }: TabHostProps): React.JSX.Element {
+function TabHost({ tab, profile, selectTab }: TabHostProps): React.JSX.Element {
   const nav = useNavStack({ id: tab.id, render: tab.render });
-
-  useEffect(() => {
-    onDepthChange(nav.depth);
-  }, [nav.depth, onDepthChange]);
 
   useInput((_input, key) => {
     if (key.escape && nav.canPop) {
@@ -113,7 +128,7 @@ function TabHost({ tab, profile, onDepthChange }: TabHostProps): React.JSX.Eleme
     }
   });
 
-  return nav.current.render({ profile, nav });
+  return nav.current.render({ profile, nav, selectTab });
 }
 
 export interface AppProps {
@@ -126,29 +141,34 @@ export interface AppProps {
 
 export function App({ profile, hooksInstalled = false, onQuit }: AppProps): React.JSX.Element {
   const [tabIndex, setTabIndex] = useState(0);
-  // Depth of the active tab's own nav stack (TabHost's, reported up via
-  // onDepthChange): ←→ cycles tabs only at depth 1, i.e. a tab's own root
-  // screen. Once a screen is pushed (depth > 1) — as ToolDetailScreen does
-  // for its Bash "By command" view toggle — ←→ belongs to that screen
-  // instead, or every drilled-in screen would fight this handler for the
-  // same keypress.
-  const [depth, setDepth] = useState(1);
   const { exit } = useApp();
   const tabs = getTabs();
   const activeTab = tabs[tabIndex % tabs.length] as Tab;
 
+  // `←→` always cycles tabs, at every depth. Screens that offer more than one
+  // view of the same data — ToolDetail's recipe/command/calls, Model's
+  // requests/rollups — switch those with `v` instead, so no drilled-in screen
+  // ever fights this handler for the same keypress, and the tab strip stays
+  // reachable from anywhere (the menu bar app's tab picker is always on
+  // screen too).
   useInput((input, key) => {
     if (key.leftArrow) {
-      if (depth > 1) return;
       setTabIndex((i) => (i - 1 + tabs.length) % tabs.length);
     } else if (key.rightArrow) {
-      if (depth > 1) return;
       setTabIndex((i) => (i + 1) % tabs.length);
     } else if (input === "q") {
       exit();
       onQuit?.();
     }
   });
+
+  const selectTab = useCallback(
+    (id: string) => {
+      const index = getTabs().findIndex((t) => t.id === id);
+      if (index >= 0) setTabIndex(index);
+    },
+    [],
+  );
 
   const activeIndex = tabIndex % tabs.length;
 
@@ -179,7 +199,7 @@ export function App({ profile, hooksInstalled = false, onQuit }: AppProps): Reac
           </Box>
         </>
       ) : null}
-      <TabHost key={activeTab.id} tab={activeTab} profile={profile} onDepthChange={setDepth} />
+      <TabHost key={activeTab.id} tab={activeTab} profile={profile} selectTab={selectTab} />
     </Box>
   );
 }

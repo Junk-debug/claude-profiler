@@ -4,13 +4,18 @@ import { looksLikeSessionId, resolveSession, type SessionListing } from "./resol
 import { SessionPicker } from "../tui/SessionPicker.js";
 import { Spinner } from "../tui/Spinner.js";
 import { App } from "../tui/App.js";
-// Registers the Timeline, Context and Hooks tabs as an import side effect,
-// same mechanism as App.tsx's own "./Overview.js" import — order here fixes
-// the `⇥` cycle order (Overview, pulled in by App.js above, then Timeline,
-// then Context, then Hooks) without App.tsx needing to know about them.
+// Registers the remaining tabs as an import side effect, same mechanism as
+// App.tsx's own "./Overview.js" import — the order here fixes the `←→` cycle
+// order without App.tsx needing to know about any of them. It is the same
+// order the menu bar app lists in its own tab picker
+// (SessionDetailView.Tab.allCases), so "the third tab" means the same thing
+// in both.
+import "../tui/Tools.js";
+import "../tui/Model.js";
 import "../tui/Timeline.js";
 import "../tui/Context.js";
 import "../tui/Hooks.js";
+import "../tui/Subagents.js";
 import { buildProfile, type Profile } from "../artifact/profile.js";
 import { writeProfileArtifact } from "../artifact/write.js";
 import { areHooksInstalled, installHooks } from "../hooks/install.js";

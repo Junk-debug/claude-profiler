@@ -52,12 +52,20 @@ Open source from day one. No telemetry, no network calls in v1, nothing leaves t
 - `agent-*.jsonl` passed as the id → profile it as a standalone session
 
 ### F2 — Navigate the profile
-1. Overview tab opens with the time split and the tool table
-2. `↑↓` moves the selection, `⏎` drills into the selected tool → per-call list sorted by
-   duration, outliers marked
-3. `⏎` on a call → detail pane: tool input, turn number, start time, duration, outlier flag
-4. `⏎` on a `Task` row → subagent rollup, sourced from that agent's own transcript
-5. `Esc` goes back one level, `⇥` cycles tabs, `q` exits
+1. Overview tab opens with the time split, the prompts, the unaccounted causes and the
+   heaviest tools
+2. `⏎` on the Model or Tools bucket opens that bucket's own tab; `↑↓` moves the selection
+3. Tools tab → `⏎` on a tool → per-call list sorted by duration, outliers marked
+4. `⏎` on a call → detail pane: tool input, turn number, start time, duration, outlier flag
+5. `⏎` on a `Task` row → subagent rollup, sourced from that agent's own transcript; the
+   Subagents tab lists them all without having to find that row
+6. `Esc` goes back one level, `←→` cycles tabs at any depth, `v` switches a screen's own
+   view, `q` exits
+
+The seven tabs (Overview, Tools, Model, Timeline, Context, Hooks, Subagents), their order,
+the figures they carry and the way each figure is formatted are one contract, shared with
+the macOS menu bar app: `src/tui/format.ts` and `macos/Sources/ProfilerBarCore/Format.swift`
+implement the same rules and their test suites assert the same cases.
 
 ### F3 — Install measurement hooks (opt-in)
 1. User runs `npx claude-profiler install-hooks`

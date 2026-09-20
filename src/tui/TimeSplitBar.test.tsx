@@ -74,9 +74,9 @@ describe("TimeSplitBar", () => {
     const frame = lastFrame() ?? "";
 
     expect(frame).toContain("Idle");
-    expect(frame).toContain("80.0%");
+    expect(frame).toContain("80%");
     // The corrected You, not the derived 90%.
-    expect(frame).toContain("10.0%");
+    expect(frame).toContain("10%");
     expect(frame).toContain("moved out of You");
     expect(frame).toContain("resumed once");
   });
@@ -140,8 +140,8 @@ describe("TimeSplitBar, stalled time", () => {
 
     expect(frame).toContain("Stalled");
     // Model keeps only what is left, as a share of the unchanged span.
-    expect(frame).toMatch(/Model\s+\S*\s*10\.0% \(1\.0s\)/);
-    expect(frame).toMatch(/Stalled\s+\S*\s*70\.0% \(7\.0s\)/);
+    expect(frame).toMatch(/Model\s+\S*\s*10% \(1\.0s\)/);
+    expect(frame).toMatch(/Stalled\s+\S*\s*70% \(7\.0s\)/);
     expect(frame).toContain("split out of Model");
   });
 
@@ -155,9 +155,9 @@ describe("TimeSplitBar, stalled time", () => {
     // to 100%, which is the whole point of dropping it from the denominator.
     // The note still names it; what goes away is the row and its share.
     expect(frame).not.toMatch(/Stalled\s+[█░]/);
-    expect(frame).toMatch(/Model\s+\S*\s*33\.3% \(1\.0s\)/);
-    expect(frame).toMatch(/Tools\s+\S*\s*33\.3% \(1\.0s\)/);
-    expect(frame).toMatch(/You\s+\S*\s*33\.3% \(1\.0s\)/);
+    expect(frame).toMatch(/Model\s+\S*\s*33% \(1\.0s\)/);
+    expect(frame).toMatch(/Tools\s+\S*\s*33% \(1\.0s\)/);
+    expect(frame).toMatch(/You\s+\S*\s*33% \(1\.0s\)/);
     expect(frame).toContain("3.0s this session spent working");
   });
 

@@ -149,7 +149,7 @@ describe("ToolDetailScreen", () => {
     const frame = lastFrame() ?? "";
     const rowsStart = frame.indexOf("Input"); // after the column header, past the "median 749ms" summary line
 
-    const slowIndex = frame.indexOf("17m44s", rowsStart);
+    const slowIndex = frame.indexOf("17m 44s", rowsStart);
     const fastIndex = frame.indexOf("749ms", rowsStart);
 
     expect(slowIndex).toBeGreaterThan(-1);
@@ -309,7 +309,7 @@ describe("ToolDetailScreen", () => {
     expect(lastFrame()).not.toContain("By command");
   });
 
-  it("shows the By command view by default, and switches to Calls on → and back on ←", async () => {
+  it("shows the By command view by default, and cycles the views on 'v'", async () => {
     const tool = makeBashGroupsTool();
     const { lastFrame, stdin } = renderToolDetail(tool, makeProfile());
 
@@ -319,11 +319,15 @@ describe("ToolDetailScreen", () => {
     expect(groupedFrame).toContain("git");
     expect(groupedFrame).not.toContain("pnpm test"); // starts on the By command view by default
 
-    stdin.write("[C"); // →: switch to the Calls view
+    // `v` cycles By recipe → By command → Calls → By recipe; the arrows are
+    // the tab strip's, at every depth (App.tsx).
+    stdin.write("v");
+    await tick();
+    stdin.write("v"); // now on Calls
     await tick();
     expect(lastFrame()).toContain("pnpm test"); // raw commands, not grouped
 
-    stdin.write("[D"); // ←: back to the By command view
+    stdin.write("v"); // wraps back round to By recipe
     await tick();
     expect(lastFrame()).not.toContain("pnpm test");
   });

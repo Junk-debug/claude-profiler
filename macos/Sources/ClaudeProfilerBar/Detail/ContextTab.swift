@@ -37,6 +37,10 @@ struct ContextTab: View {
                         title: "Context per request",
                         note: "input + cache read + cache write — what each request paid to re-read"
                     ) {
+                        Text(annotation(points.map(\.context)))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
                         Chart(points) { point in
                             AreaMark(x: .value("Request", point.id), y: .value("Tokens", point.context))
                                 .foregroundStyle(Color.blue.opacity(0.25))
@@ -48,6 +52,10 @@ struct ContextTab: View {
                     }
 
                     Panel(title: "Output per request", note: "thinking shown inside output") {
+                        Text(annotation(points.map(\.output)) + " · thinking " + annotation(points.map(\.thinking)))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
                         Chart(points) { point in
                             BarMark(x: .value("Request", point.id), y: .value("Output", point.output))
                                 .foregroundStyle(Color.pink)
@@ -73,6 +81,13 @@ struct ContextTab: View {
                 .padding(20)
             }
         }
+    }
+
+    /// The same three figures the terminal UI prints under each sparkline —
+    /// a chart says the shape, these say the numbers.
+    private func annotation(_ values: [Int]) -> String {
+        guard let last = values.last else { return "no requests" }
+        return "min \(Format.tokens(values.min() ?? 0)) · max \(Format.tokens(values.max() ?? 0)) · final \(Format.tokens(last))"
     }
 
     private var axisMarks: some AxisContent {

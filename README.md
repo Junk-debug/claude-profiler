@@ -55,30 +55,25 @@ executable is not code-signed.
 Captured from a real 30-minute session (session id and project path replaced):
 
 ```text
+Fix the flaky upload test
 Session  1c128c06-…
 Project  ~/code/my-app
-Started  2026-09-19 21:07
-Span     29m45s
-Cost     —
-Models   claude-opus-5
-Turns    12
+Ran      2026-09-19 21:07 · span 30m · 12 turns · 143 requests
+Usage    26M tokens · cost — · Opus 5
 
-[1/4] Overview  Timeline  Context  Hooks
+[1/7] Overview  Tools  Model  Timeline  Context  Hooks  Subagents
 
-  Model      ███████░░░░░░░░░░░░░░░░░░░░░░░ 24.7% (7m20s)
-> Tools      ██████████░░░░░░░░░░░░░░░░░░░░ 32.4% (9m39s)
-  You        █████████████░░░░░░░░░░░░░░░░░ 42.8% (12m44s)
+  Model      ███████░░░░░░░░░░░░░░░░░░░░░░░ 25% (7m 20s)
+> Tools      ██████████░░░░░░░░░░░░░░░░░░░░ 32% (9m 39s)
+  You        █████████████░░░░░░░░░░░░░░░░░ 43% (12m 44s)
   Unaccounted░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 0.1% (1.6s)
 
-sorted by total · 5 tools
-Tool                               Total     %       Calls  Median
-> Bash                             9m30s     31.9%   59     3.1s
-  WebFetch                         6.4s      0.4%    1      6.4s
-  Edit                             2.3s      0.1%    2      1.2s
-  Write                            1.4s      0.1%    1      1.4s
-  ToolSearch                       103ms     0.0%    1      103ms
+3 tools · 121 calls
+Bash                  ████████████████████ 9m 30s (59×, 32%)
+WebFetch              ░░░░░░░░░░░░░░░░░░░░ 6.4s (1×, 0.4%)
+Edit                  ░░░░░░░░░░░░░░░░░░░░ 2.3s (2×, 0.1%)
 
-↑↓ select · ⏎ drill in · Esc back · ←→ tabs · s sort · / filter · q quit
+↑↓ category · ⏎ Tools tab · ←→ tabs · q quit
 ```
 
 - **Model**: time Claude spent producing responses.
@@ -112,42 +107,49 @@ printed instead so you can rerun with a more specific query.
 
 ## Screens
 
-Four tabs; `←` `→` switches between them.
+Seven tabs; `←` `→` switches between them, at any depth. They are the same seven, in the
+same order, as the [menu bar app](#menu-bar-app-macos) — the two read the same profile
+artifact, so a figure that appears in both is the same number, formatted the same way.
 
-- **Overview** shows the time split. Select **Model** to see thinking vs. output tokens
-  and how much context was read from cache. Select **Tools** for the table above. Select
-  **You** for the list of pauses before each of your prompts.
-- **Timeline** lists every turn with its span, tool count, tool time and the prompt that
-  started it.
-- **Context** shows sparklines of context size, output tokens and thinking tokens over the
-  session.
-- **Hooks** shows data that only hooks can record: approval time, failed calls, result
-  sizes per tool, and cache-rewrite cost. Without hooks, this tab says so.
+| Tab | What it shows |
+| --- | --- |
+| Overview | The time split, and what each bucket holds: your prompts and how long each took to write, the unaccounted causes, the heaviest tools, the token mix |
+| Tools | Every tool, sortable and filterable, then a tool's calls, then one call |
+| Model | One row per API request, or the same time rolled up by cause, model and effort |
+| Timeline | One row per turn: when it started, its span, model time, tool time and the prompt that started it |
+| Context | Context, output and thinking per request, plus the session totals |
+| Hooks | What only hooks record: approval time, retry tax, result sizes, cache rewrites, lifecycle, slash-command cost, streaming, loaded instructions |
+| Subagents | Every subagent, with its own split, tools and calls |
 
-Drilling in from Overview:
+Drilling in:
 
-- **Tools → a tool → a call**: individual calls sorted by duration, then one call's
-  details. `←` `→` on **Bash** switches to a view grouped by command. An **Agent** or
-  **Task** call opens its subagent's own breakdown.
-- **Model → requests**: one row per API request.
+- **Overview → Model / Tools** opens that bucket's own tab. **You** and **Unaccounted**
+  open in place, and `⏎` on a prompt shows its full text.
+- **Tools → a tool → a call**: calls sorted by duration, then one call's input. `v` on
+  **Bash** cycles by-recipe, by-command and the raw call list. An **Agent** or **Task**
+  call opens its subagent.
+- **Model → a request**: everything the transcript knows about one API call, including
+  what it wrote.
 
   ```text
-    #   Started           Total    1st blk  Out    tok/s   Ctx     Cause
-  > 23  2026-09-19 21:14  27.4s    3.3s     4.0k   146.0   73.6k   after Bash
-    21  2026-09-19 21:14  22.7s    4.9s     3.1k   138.1   68.5k   after Bash
-    19  2026-09-19 21:14  20.3s    19.2s    2.1k   101.2   60.5k   after Bash
+    #   Started   Total    1st blk  Out    tok/s   Ctx     Cause
+  > 23  21:14:02  27s      3.3s     4.0k   146.0   74k     after Bash
+    21  21:14:31  23s      4.9s     3.1k   138.1   69k     after Bash
+    19  21:14:58  20s      19s      2.1k   101.2   61k     after Bash
   ```
 
-  Use `←` `→` to switch to the same time grouped by cause, model and thinking effort.
+  `v` switches to the same time grouped by cause, model and thinking effort.
+- **Timeline → a turn**: every tool call and assistant message in it, in order.
 
 ### Keys
 
 | Key | Action |
 | --- | --- |
-| `←` `→` | Switch tabs. On a drilled-in screen, switch that screen's view |
+| `←` `→` | Switch tabs — always, drilled in or not |
 | `↑` `↓` | Move the selection |
-| `⏎` | Go deeper: into a category's table, then into the selected row |
+| `⏎` | Go deeper, or open the tab that owns the selected bucket |
 | `Esc` | Go back one level |
+| `v` | Switch a screen's own view (Bash lenses, Model requests vs. rollups) |
 | `s` | Change sort order (tool table, request list) |
 | `/` | Filter the tool table by name |
 | `x` | Hide or show stalled time (shown only when the session has any) |
@@ -208,17 +210,19 @@ now. Optional notifications fire when Claude finishes a long run or waits for ap
 
 Click a session and you get **everything the terminal UI has**, for that session, kept up
 to date as it runs — the app asks the collector for the same profile artifact the CLI
-builds, so no metric is computed twice:
+builds, so no metric is computed twice. The tabs are [the same seven](#screens), in the
+same order, showing the same figures; only the input differs, since a window can offer a
+column header to sort by and a terminal cannot:
 
-| Tab | What it shows |
+| Tab | In the app |
 | --- | --- |
-| Overview | The Model / Tools / You / Idle / Unaccounted split, resumes, model time by phase and cause, the tool totals, the token mix |
-| Tools | The sortable tool table, and the selected tool's calls — or its command groups, for Bash |
-| Model | One row per API request: total, first block, output, thinking, tok/s, context, what caused it; rolled up by cause, model or effort |
-| Timeline | Turn by turn: your prompt, model time, tool time, tool count |
-| Context | Context size per request, output and thinking per request, session totals |
-| Hooks | Approval time, retry tax, parallel batches, what filled the context window, cache rewrites, lifecycle |
-| Subagents | Each subagent's own split and tools |
+| Overview | The split bar, with clickable Model and Tools buckets and a toggle for stalled time; resumes; your prompts; the unaccounted causes; the heaviest tools; the token mix |
+| Tools | The full table, sortable by any column and filterable, with the selected tool's calls, its Bash lenses, and a call's own detail |
+| Model | Rollups by cause, model or effort, the context-vs-latency correlation, and one row per request — click one for its full detail |
+| Timeline | One row per turn, with its span and its model/tool split; click a turn for its events |
+| Context | Context and output per request as charts, with min/max/final and the session totals |
+| Hooks | All eleven sections, the same ones the terminal UI prints |
+| Subagents | Each subagent's own split, tools and calls |
 
 **If you can't find the icon**, your menu bar is full: macOS drops the items that do not
 fit, silently, and a newly launched app goes to the back of the queue. The same window is

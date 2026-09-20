@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import type { MergedTimeSplit } from "../hooks/sidecar.js";
+import type { ExactToolStat, MergedTimeSplit } from "../hooks/sidecar.js";
 import type { ModelBreakdown } from "../metrics/model-breakdown.js";
 import type { TokenStats } from "../metrics/tokens.js";
 import type { UnaccountedCause, UserGap } from "../metrics/time-split.js";
@@ -197,15 +197,6 @@ export interface ModelBreakdownTableProps {
   active: boolean;
 }
 
-export interface ModelBreakdownTableProps {
-  breakdown: ModelBreakdown;
-  /** Token usage for the session, which the output split is read from. */
-  tokens: TokenStats;
-  selectedIndex: number;
-  /** See ToolTableProps.active: only highlight once the cursor is in this table. */
-  active: boolean;
-}
-
 /**
  * Model's own drill-down: what the model produced, in tokens it reported.
  *
@@ -233,6 +224,49 @@ export function ModelBreakdownTable({
       selectedIndex={selectedIndex}
       active={active}
     />
+  );
+}
+
+const TOOL_SUMMARY_ROWS = 8;
+const TOOL_NAME_WIDTH = 22;
+
+/**
+ * Tools' own row on the bar, answered in place: the heaviest few tools as
+ * bars, with the full sortable table one `⏎` away in the Tools tab. The menu
+ * bar app's Overview shows the same eight rows, for the same reason — the
+ * question "which tool ate the session" should not need a tab switch, and the
+ * question "how does Read compare at p90" should not crowd the summary.
+ */
+export function ToolSummary({ tools }: { tools: ExactToolStat[] }): React.JSX.Element {
+  if (tools.length === 0) {
+    return <Text dimColor>No tool calls recorded in this session.</Text>;
+  }
+
+  const rows = [...tools].sort((a, b) => b.totalMs - a.totalMs).slice(0, TOOL_SUMMARY_ROWS);
+  const peak = Math.max(1, ...rows.map((tool) => tool.totalMs));
+  const calls = tools.reduce((total, tool) => total + tool.calls, 0);
+
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>
+        {tools.length} tool{tools.length === 1 ? "" : "s"} · {calls} call{calls === 1 ? "" : "s"}
+        {tools.length > rows.length ? ` · heaviest ${rows.length} shown` : ""}
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        {rows.map((tool) => (
+          <Box key={tool.name}>
+            <Box width={TOOL_NAME_WIDTH} flexShrink={0}>
+              <Text wrap="truncate-end">{truncate(tool.name, TOOL_NAME_WIDTH - 1)}</Text>
+            </Box>
+            {bar(tool.totalMs / peak, "cyan")}
+            <Text>
+              {" "}
+              {formatMs(tool.totalMs)} <Text dimColor>({tool.calls}×, {formatPercent(tool.pctOfSession)})</Text>
+            </Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
   );
 }
 

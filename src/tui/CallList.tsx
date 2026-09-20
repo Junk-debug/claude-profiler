@@ -3,7 +3,7 @@ import type { Profile } from "../artifact/profile.js";
 import type { ExactToolStat } from "../hooks/sidecar.js";
 import type { ToolCall } from "../metrics/tool-stats.js";
 import type { NavStack } from "./shell.js";
-import { formatDateTime, formatMs, summarizeInput, truncate } from "./format.js";
+import { formatClock, formatMs, summarizeInput, truncate } from "./format.js";
 import { callDetailScreen } from "./CallDetail.js";
 import { subagentDetailScreen } from "./SubagentDetail.js";
 
@@ -11,12 +11,12 @@ import { subagentDetailScreen } from "./SubagentDetail.js";
 // to fit their content — the gap between columns comes from the margin, not
 // from padding inside the width.
 const TURN_WIDTH = 4;
-const STARTED_WIDTH = 16;
+const STARTED_WIDTH = 10;
 const DURATION_WIDTH = 10;
 // Widened at the expense of Turn/Started (T-input-column, 34 -> 39): the
 // previous width left almost no room once summarizeInput() stopped hiding
 // JSON punctuation behind truncation.
-const NAME_WIDTH = 39;
+const NAME_WIDTH = 45;
 const VISIBLE_ROWS = 15;
 
 function sortCallsByDuration(calls: ToolCall[]): ToolCall[] {
@@ -109,7 +109,7 @@ export function CallList({ calls: rawCalls, tool, profile, nav, emptyMessage }: 
                 <Text color={color}>{call.turnIndex}</Text>
               </Box>
               <Box width={STARTED_WIDTH} marginRight={2}>
-                <Text color={color}>{formatDateTime(call.startedAt)}</Text>
+                <Text color={color}>{formatClock(call.startedAt)}</Text>
               </Box>
               <Box width={DURATION_WIDTH} marginRight={2}>
                 <Text color={color}>

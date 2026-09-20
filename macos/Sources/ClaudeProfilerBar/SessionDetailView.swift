@@ -10,6 +10,9 @@ struct SessionDetailView: View {
     var initialTab: Tab = .overview
     @Environment(LiveStore.self) private var store
     @State private var tab: Tab?
+    /// Set when a Task call is opened from the Tools tab, so the Subagents tab
+    /// can scroll to that subagent instead of making the reader find it.
+    @State private var focusedSubagent: String?
 
     enum Tab: String, CaseIterable, Identifiable {
         case overview, tools, model, timeline, context, hooks, subagents
@@ -61,6 +64,9 @@ struct SessionDetailView: View {
 
     // MARK: Header
 
+    /// The same fields, in the same order, as the terminal UI's own header
+    /// (src/tui/App.tsx): what this session was, when it ran, what it cost —
+    /// plus the live state, which only this app can show.
     @ViewBuilder
     private var header: some View {
         let live = store.session(id: sessionId)
@@ -96,11 +102,28 @@ struct SessionDetailView: View {
                 .font(.title3.bold())
                 .lineLimit(1)
 
+            HStack(spacing: 6) {
+                Text(sessionId)
+                    .textSelection(.enabled)
+                    .help("Session id")
+                if let project = profile?.session.projectPath ?? live?.cwd {
+                    Text("·")
+                    Text(project).lineLimit(1).truncationMode(.head).help(project)
+                }
+                if let branch = profile?.session.gitBranch {
+                    Text("·")
+                    Label(branch, systemImage: "arrow.trianglehead.branch").labelStyle(.titleAndIcon)
+                }
+            }
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundStyle(.secondary)
+
             HStack(spacing: 24) {
                 if let profile {
+                    KeyValue(label: "Started", value: Format.dateTime(profile.session.startedAt))
                     KeyValue(label: "Span", value: Format.ms(profile.timeline.spanMs))
                     KeyValue(label: "Turns", value: "\(profile.session.turnCount)")
-                    KeyValue(label: "Requests", value: "\(profile.modelBreakdown.requests.count)")
+                    KeyValue(label: "Requests", value: Format.tokens(profile.modelBreakdown.requests.count))
                     KeyValue(label: "Tokens", value: Format.tokens(profile.tokens.totals.total))
                     KeyValue(label: "Cost", value: profile.cost.map { Format.usd($0.totalCostUSD) } ?? "—")
                     KeyValue(label: "Model", value: profile.session.models.map(Format.model).joined(separator: ", "))
@@ -114,6 +137,8 @@ struct SessionDetailView: View {
                 }
                 Spacer()
             }
+
+            if let profile { ToolTimingCaveat(profile: profile, hooksInstalled: store.snapshot?.hooksInstalled ?? true) }
 
             Picker("", selection: Binding(get: { tab ?? initialTab }, set: { tab = $0 })) {
                 ForEach(Tab.allCases) { tab in
@@ -138,13 +163,17 @@ struct SessionDetailView: View {
         switch state {
         case .loaded(let profile):
             switch tab ?? initialTab {
-            case .overview: OverviewTab(profile: profile)
-            case .tools: ToolsTab(profile: profile)
+            case .overview: OverviewTab(profile: profile, selectTab: { tab = $0 })
+            case .tools:
+                ToolsTab(profile: profile, openSubagent: { agentId in
+                    focusedSubagent = agentId
+                    tab = .subagents
+                })
             case .model: ModelTab(profile: profile)
             case .timeline: TimelineTab(profile: profile)
             case .context: ContextTab(profile: profile)
             case .hooks: HooksTab(profile: profile)
-            case .subagents: SubagentsTab(profile: profile)
+            case .subagents: SubagentsTab(profile: profile, focused: focusedSubagent)
             }
         case .failed(let message):
             EmptyTabNote(symbol: "exclamationmark.triangle", text: message)

@@ -2,12 +2,21 @@ import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import type { ModelBreakdown, ModelRequest, ModelRollup } from "../metrics/model-breakdown.js";
 import type { NavScreen, NavStack, ScreenProps } from "./shell.js";
-import { formatCount, formatDateTime, formatMs, formatPercent, truncate } from "./format.js";
+import {
+  formatClock,
+  formatCount,
+  formatDateTime,
+  formatModel,
+  formatMs,
+  formatPercent,
+  formatRate,
+  truncate,
+} from "./format.js";
 
 const VISIBLE_ROWS = 15;
 
 const INDEX_WIDTH = 6;
-const WHEN_WIDTH = 17;
+const WHEN_WIDTH = 10;
 const TOTAL_WIDTH = 9;
 const FIRST_WIDTH = 9;
 const OUT_WIDTH = 7;
@@ -48,10 +57,11 @@ export function sortRequests(requests: ModelRequest[], key: RequestSortKey): Mod
   }
 }
 
+/** The same words the rollups use as their key, and the same the menu bar app prints. */
 function causeLabel(request: ModelRequest): string {
   if (request.cause.kind === "tool") return `after ${request.cause.name ?? "a tool"}`;
   if (request.cause.kind === "prompt") return "after your prompt";
-  return "—";
+  return request.cause.name ?? "other";
 }
 
 function suspectLabel(request: ModelRequest): string {
@@ -129,7 +139,7 @@ export function ModelRequestList({ breakdown, nav, sortKey }: ModelRequestListPr
             </Box>
             <Box width={WHEN_WIDTH} marginRight={1} flexShrink={0}>
               <Text color={color} dimColor={!selected && !request.suspect}>
-                {formatDateTime(request.at)}
+                {formatClock(request.at)}
               </Text>
             </Box>
             <Box width={TOTAL_WIDTH} flexShrink={0}>
@@ -149,7 +159,7 @@ export function ModelRequestList({ breakdown, nav, sortKey }: ModelRequestListPr
             </Box>
             <Box width={RATE_WIDTH} flexShrink={0}>
               <Text color={color} dimColor={!selected && !request.suspect}>
-                {request.tokensPerSec === null ? "—" : request.tokensPerSec.toFixed(1)}
+                {formatRate(request.tokensPerSec)}
               </Text>
             </Box>
             <Box width={CONTEXT_WIDTH} flexShrink={0}>
@@ -270,13 +280,12 @@ export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps
   const rows = sortRequests(breakdown.requests, sortKey);
 
   useInput((input, key) => {
-    if (key.leftArrow && view !== VIEW_REQUESTS) {
-      nav.setView(VIEW_REQUESTS);
+    // `v`, not `←→`: the arrows always belong to the tab strip (App.tsx), at
+    // every depth. The menu bar app switches the same two views with a
+    // segmented picker.
+    if (input === "v") {
+      nav.setView(view === VIEW_REQUESTS ? VIEW_ROLLUPS : VIEW_REQUESTS);
       nav.setSelection(0);
-      return;
-    }
-    if (key.rightArrow && view !== VIEW_ROLLUPS) {
-      nav.setView(VIEW_ROLLUPS);
       return;
     }
     if (view !== VIEW_REQUESTS || rows.length === 0) return;
@@ -308,7 +317,7 @@ export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps
           <Text {...(view === VIEW_REQUESTS ? { color: "cyan", bold: true } : { dimColor: true })}>[Requests]</Text>
           {"  "}
           <Text {...(view === VIEW_ROLLUPS ? { color: "cyan", bold: true } : { dimColor: true })}>[By cause]</Text>
-          <Text dimColor> ←→ switch view</Text>
+          <Text dimColor>  v switch view</Text>
         </Text>
       </Box>
       <Box marginTop={1}>
@@ -321,8 +330,8 @@ export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps
       <Box marginTop={1}>
         <Text dimColor>
           {view === VIEW_ROLLUPS
-            ? "←→ switch view · Esc back · q quit"
-            : "↑↓ select · ⏎ request detail · s sort · ←→ switch view · Esc back · q quit"}
+            ? `v switch view · ←→ tabs${nav.canPop ? " · Esc back" : ""} · q quit`
+            : `↑↓ select · ⏎ request detail · s sort · v switch view · ←→ tabs${nav.canPop ? " · Esc back" : ""} · q quit`}
         </Text>
       </Box>
     </Box>
@@ -391,9 +400,9 @@ export function ModelRequestDetailScreen({
             ? `a ${request.cause.name} result coming back`
             : request.cause.kind === "prompt"
               ? "your prompt"
-              : "—"}
+              : (request.cause.name ?? "other")}
         </Field>
-        <Field label="Model">{request.model ?? "—"}</Field>
+        <Field label="Model">{request.model ? formatModel(request.model) : "—"}</Field>
         <Field label="Effort">{request.effort ?? "—"}</Field>
         <Field label="Stop reason">{request.stopReason ?? "—"}</Field>
       </Box>
@@ -415,7 +424,7 @@ export function ModelRequestDetailScreen({
           <Text dimColor>({formatCount(request.thinkingTokens)} of them thinking)</Text>
         </Field>
         <Field label="Throughput">
-          {request.tokensPerSec === null ? "—" : `${request.tokensPerSec.toFixed(1)} tok/s`}{" "}
+          {request.tokensPerSec === null ? "—" : `${formatRate(request.tokensPerSec)} tok/s`}{" "}
           <Text dimColor>(session median sets a {breakdown.stallThresholdTokensPerSec.toFixed(1)} tok/s floor)</Text>
         </Field>
         <Field label="Context carried">{formatCount(request.contextTokens)} tokens</Field>
@@ -427,7 +436,7 @@ export function ModelRequestDetailScreen({
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>Esc back · q quit</Text>
+        <Text dimColor>←→ tabs · Esc back · q quit</Text>
       </Box>
     </Box>
   );

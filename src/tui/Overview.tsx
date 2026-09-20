@@ -5,48 +5,38 @@ import { registerTab } from "./shell.js";
 import { CATEGORY_KEYS, TimeSplitBar, type Category } from "./TimeSplitBar.js";
 import {
   ModelBreakdownTable,
+  ToolSummary,
   UnaccountedBreakdown,
   UserPromptList,
   modelTokenRowCount,
 } from "./CategoryBreakdown.js";
-import { modelRequestsScreen } from "./ModelRequests.js";
-import { ToolTable, SORT_KEYS, sortTools, type SortKey } from "./ToolTable.js";
-import { toolDetailScreen } from "./ToolDetail.js";
 import { promptDetailScreen } from "./PromptDetail.js";
 
 
 type Focus = "categories" | "detail";
 
 /**
- * The default screen (F2, D10, D11): the time split, the tool table, and the
- * keys to navigate both. Two focus levels share `↑↓`: `categories` moves the
- * highlight across the four Model/Tools/You/Unaccounted rows, and `⏎` drops
- * into `detail`, where `↑↓` instead moves within that category's own
- * breakdown table (a further `⏎` on a Tools row pushes `ToolDetail`; `Esc`
- * backs out of `detail` to `categories` before it ever reaches the nav
- * stack's own pop). Cycling to other tabs (via `←→`) is handled by App.tsx's
- * tab registry, not here.
+ * The session's headline split, and what each bucket holds.
+ *
+ * `↑↓` moves the highlight across the Model / Tools / You / Unaccounted rows.
+ * `⏎` on Model or Tools opens the tab that owns that bucket; on You or
+ * Unaccounted it drops into the list shown below the bar, where `↑↓` moves
+ * within it and `Esc` backs out to the category rows again. The menu bar app
+ * shows the same five sections stacked on one scrolling page — it has the
+ * room; a terminal does not.
  */
-export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element {
-  // The highlighted tool row and the active category both live on the nav
-  // stack's own frame (nav.selection / nav.view), not local useState: popping
-  // back from ToolDetail or PromptDetail remounts this screen fresh (T14's
-  // nav stack replaces the whole subtree at each push/pop), so anything kept
-  // in local state here would reset to its initial value on the way back.
-  // Category has to survive that the same way selection does — otherwise
-  // drilling into a Tools row and hitting Esc would dump you back on Model
-  // (index 0, the default) instead of the Tools category you were actually
-  // on. `focus` stays local state and *does* reset to "categories" on that
-  // remount: that's deliberate, not a gap — the cursor should land back on
-  // the category bar, not silently reappear "inside" the table again.
-  const selectedIndex = nav.selection;
+export function OverviewScreen({ profile, nav, selectTab }: ScreenProps): React.JSX.Element {
+  // The active category lives on the nav stack's own frame (nav.view), not
+  // local useState: popping back from PromptDetail remounts this screen fresh
+  // (the nav stack replaces the whole subtree at each push/pop), so anything
+  // kept in local state here would reset to its initial value on the way back.
+  // `focus` stays local state and *does* reset to "categories" on that
+  // remount: that's deliberate — the cursor should land back on the category
+  // bar, not silently reappear "inside" the list again.
   const category = (CATEGORY_KEYS[nav.view] ?? CATEGORY_KEYS[0]) as Category;
   const [focus, setFocus] = useState<Focus>("categories");
   const [modelSelection, setModelSelection] = useState(0);
   const [youSelection, setYouSelection] = useState(0);
-  const [sortKey, setSortKey] = useState<SortKey>("totalMs");
-  const [filter, setFilter] = useState("");
-  const [filtering, setFiltering] = useState(false);
   // `x`: drop the stalled time and read the split over the working span only.
   // Off by default — the first thing a session with an 11-hour sleep in it has
   // to say is that the sleep is there, and a lens that hid it by default would
@@ -54,28 +44,13 @@ export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element
   const [excludeStalled, setExcludeStalled] = useState(false);
 
   const stalledMs = profile.modelBreakdown.suspectMs;
-  const rows = sortTools(profile.tools, sortKey, filter);
-  const onTools = category === "tools";
   const inDetail = focus === "detail";
 
   useInput((input, key) => {
-    if (filtering) {
-      if (key.return || key.escape) {
-        setFiltering(false);
-      } else if (key.backspace || key.delete) {
-        setFilter((f) => f.slice(0, -1));
-      } else if (input) {
-        setFilter((f) => f + input);
-      }
-      return;
-    }
-
     if (key.upArrow || key.downArrow) {
       const delta = key.upArrow ? -1 : 1;
       if (focus === "categories") {
         nav.setView((nav.view + delta + CATEGORY_KEYS.length) % CATEGORY_KEYS.length);
-      } else if (category === "tools") {
-        nav.setSelection(rows.length === 0 ? 0 : (selectedIndex + delta + rows.length) % rows.length);
       } else if (category === "model") {
         // The cursor walks both blocks of the token split, whose row count
         // varies: a session that never wrote a cache entry has no Cache write
@@ -86,7 +61,7 @@ export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element
         const gapCount = profile.timeline.userGaps.length;
         setYouSelection((s) => (gapCount === 0 ? 0 : (s + delta + gapCount) % gapCount));
       }
-      // unaccounted has no rows of its own to move within
+      // tools and unaccounted have no rows of their own to move within
       return;
     }
 
@@ -95,44 +70,39 @@ export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element
       // headline bar as much as Model's own table, so it has to be reachable
       // from wherever the cursor happens to be.
       setExcludeStalled((on) => !on);
-    } else if (input === "s" && onTools) {
-      setSortKey((k) => SORT_KEYS[(SORT_KEYS.indexOf(k) + 1) % SORT_KEYS.length] as SortKey);
-      nav.setSelection(0);
-    } else if (input === "/" && onTools) {
-      setFiltering(true);
     } else if (key.return) {
-      if (focus === "categories") {
+      // Model and Tools each own a tab now, so `⏎` hands off to it rather than
+      // opening a second, shallower copy of the same table here. The menu bar
+      // app's split bar makes the same two buckets clickable, to the same end.
+      if (category === "model") {
+        selectTab("model");
+      } else if (category === "tools") {
+        selectTab("tools");
+      } else if (focus === "categories") {
         setFocus("detail");
-      } else if (onTools) {
-        const tool = rows[selectedIndex];
-        if (tool) nav.push(toolDetailScreen(tool));
       } else if (category === "you") {
         const gap = profile.timeline.userGaps[youSelection];
         if (gap) nav.push(promptDetailScreen(gap, youSelection, profile.timeline.userGaps.length));
-      } else if (category === "model") {
-        // Any stage row opens the same screen: the stages say what the time
-        // went on, the request list says which calls it went on, and only the
-        // second one can be acted on.
-        nav.push(modelRequestsScreen(profile.modelBreakdown));
       }
     } else if (key.escape && focus === "detail") {
       setFocus("categories");
     }
-    // `←→` (switch tab) is handled by App.tsx via the tab registry (T15).
+    // `←→` (switch tab) is handled by App.tsx via the tab registry.
   });
 
   // `x` is only advertised when this session has stalled time to hide: a key
   // that does nothing is worse than no key at all, and most sessions have none.
   const stalledKey = stalledMs === 0 ? "" : excludeStalled ? " · x show stalled" : " · x hide stalled";
-  const keys = !inDetail
-    ? "↑↓ category · ⏎ into table · ←→ tabs"
-    : onTools
-      ? "↑↓ select · ⏎ drill in · Esc back · ←→ tabs · s sort · / filter"
-      : category === "you"
-        ? "↑↓ select · ⏎ prompt detail · Esc back · ←→ tabs"
-        : category === "model"
-          ? "↑↓ select · ⏎ requests · Esc back · ←→ tabs"
-          : "↑↓ select · Esc back · ←→ tabs";
+  const keys =
+    category === "model"
+      ? "↑↓ category · ⏎ Model tab · ←→ tabs"
+      : category === "tools"
+        ? "↑↓ category · ⏎ Tools tab · ←→ tabs"
+        : !inDetail
+          ? "↑↓ category · ⏎ into list · ←→ tabs"
+          : category === "you"
+            ? "↑↓ select · ⏎ prompt detail · Esc back · ←→ tabs"
+            : "↑↓ select · Esc back · ←→ tabs";
   const keyHint = `${keys}${stalledKey} · q quit`;
 
   return (
@@ -147,7 +117,7 @@ export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element
         />
       </Box>
       {category === "tools" ? (
-        <ToolTable tools={profile.tools} selectedIndex={selectedIndex} sortKey={sortKey} filter={filter} active={inDetail} />
+        <ToolSummary tools={profile.tools} />
       ) : category === "model" ? (
         <ModelBreakdownTable
           breakdown={profile.modelBreakdown}
@@ -161,7 +131,7 @@ export function OverviewScreen({ profile, nav }: ScreenProps): React.JSX.Element
         <UnaccountedBreakdown timeline={profile.timeline} unmatchedToolUses={profile.diagnostics.unmatchedToolUses} />
       )}
       <Box marginTop={1}>
-        <Text dimColor>{filtering ? "type to filter · ⏎/Esc done" : keyHint}</Text>
+        <Text dimColor>{keyHint}</Text>
       </Box>
     </Box>
   );

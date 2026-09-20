@@ -14,6 +14,20 @@ export interface TokenStats {
   totals: TokenBucket;
 }
 
+/**
+ * Everything the API counted, the way the menu bar app's `TokenBucket.total`
+ * counts it (Profile.swift): thinking is left out because it is already inside
+ * `output`, not beside it.
+ */
+export function bucketTotal(bucket: TokenBucket): number {
+  return bucket.input + bucket.output + bucket.cacheRead + bucket.cacheCreate1h + bucket.cacheCreate5m;
+}
+
+/** Cache writes, both TTLs, as one figure — neither UI ever shows them apart. */
+export function cacheCreateTotal(bucket: TokenBucket): number {
+  return bucket.cacheCreate1h + bucket.cacheCreate5m;
+}
+
 const UNKNOWN_MODEL = "unknown";
 
 function emptyBucket(): TokenBucket {
