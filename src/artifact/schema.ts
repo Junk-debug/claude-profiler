@@ -310,7 +310,6 @@ export const PROFILE_JSON_SCHEMA = {
         "suspect",
         "suspectMs",
         "stallThresholdTokensPerSec",
-        "contextLatency",
         "byCause",
         "byModel",
         "byEffort",
@@ -337,19 +336,6 @@ export const PROFILE_JSON_SCHEMA = {
         },
         suspectMs: { type: "number", minimum: 0 },
         stallThresholdTokensPerSec: { type: "number", minimum: 0 },
-        contextLatency: {
-          oneOf: [
-            {
-              type: "object",
-              required: ["correlation", "requests"],
-              properties: {
-                correlation: { type: "number", minimum: -1, maximum: 1 },
-                requests: { type: "integer", minimum: 0 },
-              },
-            },
-            { type: "null" },
-          ],
-        },
         byCause: { type: "array", items: { $ref: "#/$defs/modelRollup" } },
         byModel: { type: "array", items: { $ref: "#/$defs/modelRollup" } },
         byEffort: { type: "array", items: { $ref: "#/$defs/modelRollup" } },

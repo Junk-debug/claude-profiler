@@ -18,7 +18,6 @@ function makeBreakdown(overrides: Partial<ModelBreakdown> = {}): ModelBreakdown 
     suspect: [],
     suspectMs: 0,
     stallThresholdTokensPerSec: 4.2,
-    contextLatency: null,
     byCause: [],
     byModel: [],
     byEffort: [],

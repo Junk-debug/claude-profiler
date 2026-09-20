@@ -218,7 +218,7 @@ column header to sort by and a terminal cannot:
 | --- | --- |
 | Overview | The split bar, with clickable Model and Tools buckets and a toggle for stalled time; resumes; your prompts; the unaccounted causes; the heaviest tools; the token mix |
 | Tools | The full table, sortable by any column and filterable, with the selected tool's calls, its Bash lenses, and a call's own detail |
-| Model | Rollups by cause, model or effort, the context-vs-latency correlation, and one row per request — click one for its full detail |
+| Model | Rollups by cause, model or effort, and one row per request — click one for its full detail |
 | Timeline | One row per turn, with its span and its model/tool split; click a turn for its events |
 | Context | Context and output per request as charts, with min/max/final and the session totals |
 | Hooks | All eleven sections, the same ones the terminal UI prints |

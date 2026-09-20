@@ -68,8 +68,6 @@ struct ModelTab: View {
                         detail: "\(rollup.requests) req"
                     )
                 }
-
-                contextLatency
             }
             .padding(16)
             .frame(minHeight: 200)
@@ -80,35 +78,6 @@ struct ModelTab: View {
         .sheet(item: $openedRequest) { request in
             ModelRequestSheet(request: request, breakdown: profile.modelBreakdown) { openedRequest = nil }
         }
-    }
-
-    /// "Does a bigger prompt mean a slower first block?" — the terminal UI's
-    /// own wording, and its own bluntness at the low end: no relationship worth
-    /// acting on is the answer most sessions get, and a bare 0.13 invites
-    /// reading a trend into noise.
-    @ViewBuilder
-    private var contextLatency: some View {
-        HStack(spacing: 6) {
-            Text("Does a bigger prompt mean a slower first block?").font(.system(size: 11, weight: .medium))
-            if let latency = profile.modelBreakdown.contextLatency, let r = latency.correlation {
-                Text("r = \(String(format: "%.2f", r)) over \(latency.requests) request\(latency.requests == 1 ? "" : "s")")
-                    .font(.system(size: 11))
-                    .monospacedDigit()
-                Text(describe(r)).font(.system(size: 11)).foregroundStyle(.secondary)
-            } else {
-                Text("too few comparable requests in this session to say")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    private func describe(_ r: Double) -> String {
-        let strength = abs(r)
-        if strength < 0.3 { return "— no relationship worth acting on" }
-        if strength < 0.6 { return r > 0 ? "— a weak pull upwards" : "— a weak pull downwards" }
-        return r > 0 ? "— bigger prompts really are slower here" : "— bigger prompts are oddly faster here"
     }
 
     private var requestTable: some View {

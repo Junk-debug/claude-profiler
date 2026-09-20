@@ -119,17 +119,11 @@ public struct ModelBreakdown: Decodable, Equatable, Sendable {
     public let suspect: [ModelSuspect]
     public let suspectMs: Double
     public let stallThresholdTokensPerSec: Double?
-    public let contextLatency: ContextLatency?
     public let byCause: [ModelRollup]
     public let byModel: [ModelRollup]
     public let byEffort: [ModelRollup]
     public let coverage: Coverage?
     public let precision: String?
-
-    public struct ContextLatency: Decodable, Equatable, Sendable {
-        public let correlation: Double?
-        public let requests: Int
-    }
 
     public struct Coverage: Decodable, Equatable, Sendable {
         public let requestsWithBlockSplit: Int
