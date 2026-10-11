@@ -100,6 +100,11 @@ describe("App", () => {
     expect(lastFrame()).toContain("aaaaaaaa-0000-0000-0000-000000000000");
   });
 
+  it("says why there is no cost instead of leaving a bare dash", () => {
+    const { lastFrame } = render(createElement(App, { profile: makeProfile() }));
+    expect(lastFrame()).toContain("cost — (recorded when the session exits)");
+  });
+
   it("quits on 'q'", async () => {
     const onQuit = vi.fn();
     const { stdin } = render(createElement(App, { profile: makeProfile(), onQuit }));

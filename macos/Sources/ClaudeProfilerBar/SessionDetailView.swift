@@ -127,7 +127,13 @@ struct SessionDetailView: View {
                     KeyValue(label: "Turns", value: "\(profile.session.turnCount)")
                     KeyValue(label: "Requests", value: Format.tokens(profile.modelBreakdown.requests.count))
                     KeyValue(label: "Tokens", value: Format.tokens(profile.tokens.totals.total))
-                    KeyValue(label: "Cost", value: profile.cost.map { Format.usd($0.totalCostUSD) } ?? "—")
+                    KeyValue(
+                        label: "Cost",
+                        value: profile.cost.map { Format.usd($0.totalCostUSD) } ?? "—",
+                        help: profile.cost == nil
+                            ? "Claude Code records the cost when the session exits, so a running or killed session has none."
+                            : nil
+                    )
                     KeyValue(label: "Model", value: profile.session.models.map(Format.model).joined(separator: ", "))
                 } else if let live {
                     KeyValue(label: "Tokens", value: Format.tokens(live.tokens.total))

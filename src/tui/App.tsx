@@ -48,7 +48,9 @@ function Header({ profile }: { profile: Profile }): React.JSX.Element {
   ].join(" · ");
   const usage = [
     `${formatCount(bucketTotal(tokens.totals))} tokens`,
-    cost ? formatUsd(cost.totalCostUSD) : "cost —",
+    // Claude Code writes `cost-state` only when the process exits, so a live
+    // or killed session has none — say that rather than leave a bare dash.
+    cost ? formatUsd(cost.totalCostUSD) : "cost — (recorded when the session exits)",
     formatModels(session.models),
   ].join(" · ");
 
