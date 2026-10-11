@@ -2,7 +2,7 @@ import AppKit
 import ProfilerBarCore
 import SwiftUI
 
-/// `ClaudeProfilerBar --render-png <path> [--detail] [--tab <name>] [--dark]`:
+/// `ClaudeProfilerBar --render-png <path> [--detail] [--tab <name>] [--turn <n>] [--sheet] [--dark]`:
 /// renders the popover, or a session's detail tab, from real collector data
 /// to a PNG and exits — for checking a UI change and for README screenshots
 /// without clicking through the menu bar.
@@ -34,6 +34,20 @@ enum PreviewRenderer {
                let tab = SessionDetailView.Tab(rawValue: arguments[flag + 1])
             {
                 detail.initialTab = tab
+            }
+            if let flag = arguments.firstIndex(of: "--turn"), flag + 1 < arguments.count,
+               let turn = Int(arguments[flag + 1])
+            {
+                detail.initialTurn = turn
+                // A sheet is its own window, so the offscreen host below would
+                // capture the tab underneath it and not the sheet. Draw the
+                // sheet's own view instead, which is what a screenshot of it
+                // is meant to show anyway.
+                if arguments.contains("--sheet"), let profile,
+                   let row = TimelineTurn.rows(from: profile).first(where: { $0.index == turn })
+                {
+                    return render(AnyView(TurnPromptSheet(turn: row) {}), to: path, dark: dark)
+                }
             }
             return render(AnyView(detail.frame(width: 900, height: 680).environment(store)), to: path, dark: dark)
         }

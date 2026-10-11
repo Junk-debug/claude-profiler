@@ -94,11 +94,15 @@ struct PopoverView: View {
                     if !snapshot.hooksInstalled { hooksHint }
                     if !live.isEmpty {
                         sectionTitle("Running")
-                        ForEach(live) { row($0, now: context.date) }
+                        // A session that ends moves from one ForEach to the other with the
+                        // same identity, and SwiftUI then keeps the row it already built —
+                        // an ended session still drawn with its live CPU, memory and burn.
+                        // Scoping the id to the section makes it a new view instead.
+                        ForEach(live) { row($0, now: context.date).id("live-\($0.id)") }
                     }
                     if !ended.isEmpty {
                         sectionTitle("Earlier today")
-                        ForEach(ended) { row($0, now: context.date) }
+                        ForEach(ended) { row($0, now: context.date).id("ended-\($0.id)") }
                     }
                 }
                 .padding(6)

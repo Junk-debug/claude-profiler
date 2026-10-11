@@ -8,6 +8,8 @@ struct SessionDetailView: View {
     let sessionId: String
     /// Set by `--render-png --tab <name>` so a screenshot can pick a tab.
     var initialTab: Tab = .overview
+    /// Set by `--render-png --turn <n>`, for a screenshot of an expanded turn.
+    var initialTurn: Int?
     @Environment(LiveStore.self) private var store
     @State private var tab: Tab?
     /// Set when a Task call is opened from the Tools tab, so the Subagents tab
@@ -170,7 +172,7 @@ struct SessionDetailView: View {
                     tab = .subagents
                 })
             case .model: ModelTab(profile: profile)
-            case .timeline: TimelineTab(profile: profile)
+            case .timeline: TimelineTab(profile: profile, initialExpanded: initialTurn)
             case .context: ContextTab(profile: profile)
             case .hooks: HooksTab(profile: profile)
             case .subagents: SubagentsTab(profile: profile, focused: focusedSubagent)

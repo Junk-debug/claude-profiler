@@ -156,10 +156,28 @@ describe("TimelineScreen", () => {
 
   it("shows the prompt that triggered a turn", () => {
     const profile = makeProfile({
-      prompts: [{ turnIndex: 0, at: "2026-01-01T00:00:00.000Z", preview: "do the thing" }],
+      prompts: [{ turnIndex: 0, at: "2026-01-01T00:00:00.000Z", preview: "do the thing", full: "do the thing" }],
     });
     const { lastFrame } = renderTimeline(profile);
     expect(lastFrame()).toContain("do the thing");
+  });
+
+  it("prints the turn's whole prompt on expand, not the one-line preview the list row is cut to", async () => {
+    const profile = makeProfile({
+      prompts: [
+        {
+          turnIndex: 0,
+          at: "2026-01-01T00:00:00.000Z",
+          preview: "do the thing…",
+          full: "do the thing, and then the other thing nobody could read from the list row",
+        },
+      ],
+    });
+    const { lastFrame, stdin } = renderTimeline(profile);
+
+    stdin.write("\r"); // expand turn 0
+    await tick();
+    expect(lastFrame()).toContain("nobody could read from the list row");
   });
 
   it("labels a turn with no captured prompt honestly rather than fabricating data", () => {

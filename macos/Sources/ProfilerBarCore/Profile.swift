@@ -312,6 +312,16 @@ public struct PromptPoint: Decodable, Equatable, Sendable {
     public let turnIndex: Int
     public let at: String?
     public let preview: String
+    /// The same prompt capped much higher than `preview` — what the Timeline's
+    /// turn detail shows. Optional so a profile from an older collector still
+    /// decodes; `text` falls back to the preview then.
+    public let full: String?
+
+    /// As much of the prompt as this profile carries.
+    public var text: String {
+        if let full, !full.isEmpty { return full }
+        return preview
+    }
 }
 
 // MARK: - Hooks

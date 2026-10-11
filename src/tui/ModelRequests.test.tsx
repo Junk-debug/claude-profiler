@@ -6,6 +6,7 @@ import { ModelRequestDetailScreen, ModelRollups, modelRequestsScreen, sortReques
 import type { NavStack } from "./shell.js";
 import { useNavStack } from "./shell.js";
 import type { Profile } from "../artifact/profile.js";
+import type { TokenStats } from "../metrics/tokens.js";
 
 const tick = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -53,12 +54,45 @@ function makeBreakdown(overrides: Partial<ModelBreakdown> = {}): ModelBreakdown 
   };
 }
 
-function renderRequests(breakdown: ModelBreakdown): ReturnType<typeof render> {
+const TOKENS: TokenStats = {
+  byModel: {},
+  totals: {
+    input: 900,
+    output: 1500,
+    thinking: 600,
+    cacheRead: 120_000,
+    cacheCreate1h: 0,
+    cacheCreate5m: 4000,
+  },
+};
+
+/** Only what the Model tab's five views actually read off the profile. */
+function makeProfile(): Profile {
+  return { tokens: TOKENS } as Profile;
+}
+
+const VIEWS = ["type", "cause", "model", "effort", "requests"] as const;
+
+/**
+ * The screen lands on its first view ("By type"); a test that is about one of
+ * the other four asks for it by its digit first, the same way a reader would,
+ * and waits for the frame that digit produced.
+ */
+async function renderRequests(
+  breakdown: ModelBreakdown,
+  view: (typeof VIEWS)[number] = "requests",
+): Promise<ReturnType<typeof render>> {
   function Wrapper(): React.JSX.Element {
     const nav: NavStack = useNavStack(modelRequestsScreen(breakdown));
-    return nav.current.render({ profile: {} as Profile, nav });
+    return nav.current.render({ profile: makeProfile(), nav, selectTab: () => {} });
   }
-  return render(createElement(Wrapper));
+  const result = render(createElement(Wrapper));
+  const digit = VIEWS.indexOf(view) + 1;
+  if (digit !== 1) {
+    result.stdin.write(String(digit));
+    await tick();
+  }
+  return result;
 }
 
 describe("sortRequests", () => {
@@ -88,8 +122,25 @@ describe("sortRequests", () => {
 });
 
 describe("ModelRequestsScreen", () => {
-  it("lists one row per request with its throughput and context size", () => {
-    const { lastFrame } = renderRequests(makeBreakdown());
+  it("opens on the token split, the same one the Overview shows", async () => {
+    const { lastFrame } = await renderRequests(makeBreakdown(), "type");
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("[By type]");
+    expect(frame).toContain("Thinking");
+    expect(frame).toContain("Generating");
+    expect(frame).toContain("Context read back");
+  });
+
+  it("names all five views, in the order both UIs show them", async () => {
+    const { lastFrame } = await renderRequests(makeBreakdown(), "type");
+    const frame = lastFrame() ?? "";
+    for (const label of ["By type", "By cause", "By model", "By effort", "Requests"]) {
+      expect(frame).toContain(`[${label}]`);
+    }
+  });
+
+  it("lists one row per request with its throughput and context size", async () => {
+    const { lastFrame } = await renderRequests(makeBreakdown());
     const frame = lastFrame() ?? "";
     expect(frame).toContain("[Requests]");
     expect(frame).toContain("tok/s");
@@ -98,25 +149,45 @@ describe("ModelRequestsScreen", () => {
     expect(frame).toContain("after your prompt");
   });
 
-  it("flags a suspect request in the list instead of letting it pass as model work", () => {
-    const { lastFrame } = renderRequests(
+  it("flags a suspect request in the list instead of letting it pass as model work", async () => {
+    const { lastFrame } = await renderRequests(
       makeBreakdown({ requests: [makeRequest({ suspect: "stalled", tokensPerSec: 0.2 })] }),
     );
     expect(lastFrame() ?? "").toContain("stalled");
   });
 
-  it("switches to the rollups on 'v', leaving the arrows to the tab strip", async () => {
-    const { lastFrame, stdin } = renderRequests(makeBreakdown());
-    stdin.write("v");
-    await tick();
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("By what handed control back");
-    expect(frame).toContain("after Bash");
-    expect(frame).toContain("By thinking effort");
+  it("gives each rollup a view of its own rather than stacking all three", async () => {
+    const { lastFrame } = await renderRequests(makeBreakdown(), "cause");
+    const onCause = lastFrame() ?? "";
+    expect(onCause).toContain("by what handed control back to the model");
+    expect(onCause).toContain("after Bash");
+    expect(onCause).not.toContain("by the thinking effort");
+
+    const { lastFrame: effortFrame } = await renderRequests(makeBreakdown(), "effort");
+    const onEffort = effortFrame() ?? "";
+    expect(onEffort).toContain("by the thinking effort it was asked for");
+    expect(onEffort).toContain("high");
+    expect(onEffort).not.toContain("by what handed control back");
+  });
+
+  it("cycles through every view on 'v', leaving the arrows to the tab strip", async () => {
+    const { lastFrame, stdin } = await renderRequests(makeBreakdown(), "type");
+    const seen: string[] = [];
+    for (let i = 0; i < VIEWS.length; i += 1) {
+      seen.push(lastFrame() ?? "");
+      stdin.write("v");
+      await tick();
+    }
+    expect(seen[1] ?? "").toContain("by what handed control back");
+    expect(seen[2] ?? "").toContain("claude-sonnet-5");
+    expect(seen[3] ?? "").toContain("by the thinking effort");
+    expect(seen[4] ?? "").toContain("1st blk");
+    // A sixth `v` wraps back round to the first view rather than sticking.
+    expect(lastFrame() ?? "").toContain("Context read back");
   });
 
   it("cycles the sort key on 's'", async () => {
-    const { lastFrame, stdin } = renderRequests(makeBreakdown());
+    const { lastFrame, stdin } = await renderRequests(makeBreakdown());
     expect(lastFrame() ?? "").toContain("by total time");
     stdin.write("s");
     await tick();
@@ -124,7 +195,7 @@ describe("ModelRequestsScreen", () => {
   });
 
   it("drills into a request on Enter", async () => {
-    const { lastFrame, stdin } = renderRequests(makeBreakdown());
+    const { lastFrame, stdin } = await renderRequests(makeBreakdown());
     stdin.write("\r");
     await tick();
     const frame = lastFrame() ?? "";
@@ -132,20 +203,20 @@ describe("ModelRequestsScreen", () => {
     expect(frame).toContain("Context carried");
   });
 
-  it("says so plainly when there are no requests", () => {
-    const { lastFrame } = renderRequests(makeBreakdown({ requests: [], totalMs: 0 }));
+  it("says so plainly when there are no requests", async () => {
+    const { lastFrame } = await renderRequests(makeBreakdown({ requests: [], totalMs: 0 }));
     expect(lastFrame() ?? "").toContain("No model requests recorded");
   });
 });
 
 describe("ModelRollups", () => {
-  it("shows the same total grouped three ways", () => {
-    const { lastFrame } = render(createElement(ModelRollups, { breakdown: makeBreakdown() }));
+  it("shows one grouping of the same total at a time", () => {
+    const { lastFrame } = render(
+      createElement(ModelRollups, { breakdown: makeBreakdown(), view: "model" as const }),
+    );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("By what handed control back");
-    expect(frame).toContain("By model");
-    expect(frame).toContain("By thinking effort");
     expect(frame).toContain("claude-sonnet-5");
+    expect(frame).toContain("the same 5.0s, by which model answered");
   });
 });
 

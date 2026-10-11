@@ -395,11 +395,12 @@ export const PROFILE_JSON_SCHEMA = {
     },
     promptPoint: {
       type: "object",
-      required: ["turnIndex", "at", "preview"],
+      required: ["turnIndex", "at", "preview", "full"],
       properties: {
         turnIndex: { type: "integer", minimum: 0 },
         at: { type: ["string", "null"] },
         preview: { type: "string" },
+        full: { type: "string" },
       },
     },
     phaseSplit: {

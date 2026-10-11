@@ -237,7 +237,11 @@ function assistantTurnEvent(point: ContextPoint, key: string): TurnEvent {
 function TurnDetailScreen({ profile, turnIndex, nav }: ScreenProps & { turnIndex: number }): React.JSX.Element {
   // nav.selection, not local useState: see Overview.tsx's comment on the same pattern.
   const selectedIndex = nav.selection;
-  const trigger = profile.prompts.find((p) => p.turnIndex === turnIndex)?.preview ?? null;
+  // `full` (4000 chars), not the 37-column `preview` the list row shows: this
+  // screen is where a prompt gets read, so it prints as much of it as the
+  // artifact kept.
+  const prompt = profile.prompts.find((p) => p.turnIndex === turnIndex) ?? null;
+  const trigger = prompt === null ? null : prompt.full || prompt.preview;
 
   const callEvents = profile.tools.flatMap((tool) =>
     tool.callRefs.filter((c) => c.turnIndex === turnIndex).map((c) => callTurnEvent(c, tool)),

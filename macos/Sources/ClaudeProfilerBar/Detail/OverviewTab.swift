@@ -23,10 +23,10 @@ struct OverviewTab: View {
             VStack(alignment: .leading, spacing: 20) {
                 timeSplit
                 if let phases = profile.phases, !phases.phases.isEmpty { resumes(phases) }
+                tokens
+                tools
                 prompts
                 unaccounted
-                tools
-                tokens
             }
             .padding(20)
         }
@@ -76,6 +76,37 @@ struct OverviewTab: View {
                     Spacer()
                 }
                 .font(.system(size: 11))
+            }
+        }
+    }
+
+    // MARK: Model
+
+    private var tokens: some View {
+        TokenSplitPanels(tokens: profile.tokens, requests: profile.modelBreakdown.requests.count)
+    }
+
+    // MARK: Tools
+
+    private var tools: some View {
+        Panel(
+            title: "Tools",
+            note: "\(profile.tools.count) tools · \(profile.tools.reduce(0) { $0 + $1.calls }) calls"
+        ) {
+            let peak = max(1, profile.tools.map(\.totalMs).max() ?? 1)
+            ForEach(profile.tools.prefix(8)) { tool in
+                BarRow(
+                    label: tool.name,
+                    value: Format.ms(tool.totalMs),
+                    fraction: tool.totalMs / peak,
+                    color: .teal,
+                    detail: "\(tool.calls)×"
+                )
+            }
+            if profile.tools.count > 8 {
+                Button("See all \(profile.tools.count) tools") { selectTab(.tools) }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
             }
         }
     }
@@ -174,50 +205,35 @@ struct OverviewTab: View {
             ? "No incomplete tool calls in this session; the rest is rounding and gaps between recorded events."
             : "No incomplete tool calls in this session."
     }
+}
 
-    // MARK: Tools
+/// What the model read and what it produced, on two scales rather than one.
+///
+/// Input and output are not the same quantity: input counts the same context
+/// re-read on every request, output counts what was written, once. On a single
+/// scale output is a fraction of a percent and thinking is invisible inside it
+/// — which is the one thing these panels exist to show.
+///
+/// Shown twice: as the Overview's Model section, and as the Model tab's "By
+/// type" view, the same way the terminal UI reuses `ModelBreakdownTable` in
+/// both places (src/tui/CategoryBreakdown.tsx).
+struct TokenSplitPanels: View {
+    let tokens: TokenStats
+    /// How many API requests the totals were measured over, for the note.
+    let requests: Int
 
-    private var tools: some View {
-        Panel(
-            title: "Tools",
-            note: "\(profile.tools.count) tools · \(profile.tools.reduce(0) { $0 + $1.calls }) calls"
-        ) {
-            let peak = max(1, profile.tools.map(\.totalMs).max() ?? 1)
-            ForEach(profile.tools.prefix(8)) { tool in
-                BarRow(
-                    label: tool.name,
-                    value: Format.ms(tool.totalMs),
-                    fraction: tool.totalMs / peak,
-                    color: .teal,
-                    detail: "\(tool.calls)×"
-                )
-            }
-            if profile.tools.count > 8 {
-                Button("See all \(profile.tools.count) tools") { selectTab(.tools) }
-                    .buttonStyle(.link)
-                    .font(.system(size: 11))
-            }
-        }
-    }
-
-    // MARK: Tokens
-
-    /// What the model read and what it produced, on two scales rather than one.
-    ///
-    /// Input and output are not the same quantity: input counts the same
-    /// context re-read on every request, output counts what was written, once.
-    /// On a single scale output is a fraction of a percent and thinking is
-    /// invisible inside it — which is the one thing this panel exists to show.
-    private var tokens: some View {
-        let bucket = profile.tokens.totals
+    var body: some View {
+        let bucket = tokens.totals
         let output = bucket.output
         let thinking = min(bucket.thinking, output)
         let contextRows = TokenRow.context(of: bucket)
         let contextTotal = contextRows.reduce(0) { $0 + $1.count }
-        let requests = profile.modelBreakdown.requests.count
 
-        return VStack(alignment: .leading, spacing: 20) {
-            Panel(title: "Output", note: "\(Format.tokens(output)) written · measured over \(requests) request\(requests == 1 ? "" : "s")") {
+        VStack(alignment: .leading, spacing: 20) {
+            Panel(
+                title: "Output",
+                note: "\(Format.tokens(output)) written · measured over \(requests) request\(requests == 1 ? "" : "s")"
+            ) {
                 BarRow(
                     label: "Thinking",
                     value: Format.tokens(thinking),
