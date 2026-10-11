@@ -1,0 +1,60 @@
+name: macOS app
+
+# Builds "Claude Profiler.app" (macos/scripts/bundle.sh) and zips it, once per
+# Mac architecture, as the `app-*` artifacts. Called by CI, to catch an app that
+# no longer builds, and by Publish, to attach it to the release.
+#
+# The Swift build and the collector's Node single executable both target the
+# machine they run on, hence a runner per architecture.
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, target: arm64 }
+          - { runner: macos-15-intel, target: x64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+
+      # The collector embeds this Node: `--build-sea` needs >= 25.5.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: macos/scripts/bundle.sh
+
+      - name: Zip the app
+        run: |
+          cd macos/build
+          # ditto, not zip: it keeps the bundle's symlinks and signature intact.
+          ditto -c -k --keepParent "Claude Profiler.app" "Claude-Profiler-macos-${{ matrix.target }}.zip"
+
+      # What a user gets: the zip, unpacked, still verifies, and its collector
+      # starts and answers on an empty home directory.
+      - name: Smoke test the zip
+        run: |
+          rm -rf "$RUNNER_TEMP/app" && mkdir "$RUNNER_TEMP/app"
+          ditto -x -k "macos/build/Claude-Profiler-macos-${{ matrix.target }}.zip" "$RUNNER_TEMP/app"
+          app="$RUNNER_TEMP/app/Claude Profiler.app"
+          codesign --verify --deep --strict "$app"
+          mkdir "$RUNNER_TEMP/home"
+          HOME="$RUNNER_TEMP/home" "$app/Contents/Resources/cprof-live" --once | grep -q '"type":"snapshot"'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$(node -p "require('./package.json').version")"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.target }}
+          path: macos/build/Claude-Profiler-macos-${{ matrix.target }}.zip
+          if-no-files-found: error

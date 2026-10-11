@@ -1,7 +1,7 @@
 name: Publish
 
-# Publishes to npm, and the standalone executables to the GitHub release and
-# the Homebrew tap, when a version tag is pushed:
+# Publishes to npm, and the standalone executables and the macOS app to the
+# GitHub release and the Homebrew tap, when a version tag is pushed:
 #
 #   pnpm version patch   # or minor / major — bumps package.json and tags vX.Y.Z
 #   git push --follow-tags
@@ -132,3 +132,29 @@ jobs:
           }
           publish homebrew-tap "Formula/$package.rb" scripts/homebrew-formula.sh "$package"
           publish scoop-bucket "bucket/$package.json" scripts/scoop-manifest.sh
+
+  app:
+    uses: ./.github/workflows/macos-app.yml
+
+  # Attaches the macOS app, zipped per architecture, to the release. Its
+  # checksums go in a file of their own: install.sh reads checksums.txt and
+  # expects only the executables in it.
+  release-app:
+    needs: [publish, app]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: app
+          merge-multiple: true
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd app
+          sha256sum Claude-Profiler-macos-*.zip > checksums-app.txt
+          cat checksums-app.txt
+          gh release upload "$GITHUB_REF_NAME" Claude-Profiler-macos-*.zip checksums-app.txt --clobber \
+            --repo "$GITHUB_REPOSITORY"

@@ -198,6 +198,24 @@ question — **what is running right now** — for every Claude Code front end a
 CLI, the VS Code extension and Claude Desktop's Code tab all run the same binary and write
 the same files, so one collector covers all three.
 
+### Install
+
+Download `Claude-Profiler-macos-arm64.zip` (Apple Silicon) or
+`Claude-Profiler-macos-x64.zip` (Intel) from the
+[latest release](https://github.com/Softjey/claude-profiler/releases/latest), unzip it and
+drag **Claude Profiler** to Applications. macOS 14 or later; it needs no Node.
+
+The app is signed ad hoc, not notarized, so macOS blocks it the first time. Either
+right click → **Open** (macOS 14), or on macOS 15 and later open **System Settings →
+Privacy & Security** and press **Open Anyway**. From a terminal, this does the same:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Claude Profiler.app"
+```
+
+The release also has `checksums-app.txt` with the SHA-256 of each zip. To build it
+yourself instead (Node >= 25.5 and a Swift toolchain; the Command Line Tools are enough):
+
 ```sh
 macos/scripts/bundle.sh         # → macos/build/Claude Profiler.app
 open "macos/build/Claude Profiler.app"
@@ -218,8 +236,8 @@ column header to sort by and a terminal cannot:
 | --- | --- |
 | Overview | The split bar, with clickable Model and Tools buckets and a toggle for stalled time; resumes; your prompts; the unaccounted causes; the heaviest tools; the token mix |
 | Tools | The full table, sortable by any column and filterable, with the selected tool's calls, its Bash lenses, and a call's own detail |
-| Model | Rollups by cause, model or effort, and one row per request — click one for its full detail |
-| Timeline | One row per turn, with its span and its model/tool split; click a turn for its events |
+| Model | Five views of the Model bucket: the token split (by type), the time by cause, by model and by effort, and one row per request — click one for its full detail |
+| Timeline | One row per turn, with its span and its model/tool split; click a turn for its whole prompt and its events |
 | Context | Context and output per request as charts, with min/max/final and the session totals |
 | Hooks | All eleven sections, the same ones the terminal UI prints |
 | Subagents | Each subagent's own split, tools and calls |
@@ -249,15 +267,14 @@ Notes and limits:
 
 - **Regular Claude Desktop chats are not shown.** They run on Anthropic's servers and
   leave no local token record. Desktop's Code tab is shown in full.
-- **Cost stays blank for live sessions.** Claude Code writes its `cost-state` record at
-  the end of a session, and this tool never estimates cost from tokens.
+- **Cost stays blank for live sessions.** Claude Code writes its `cost-state` record only
+  when the session's process exits, so a running one — and one that was killed — has none,
+  and this tool never estimates cost from tokens.
 - `~/.claude/sessions/` is Claude Code's own internal format. Every field is treated as
   optional, and a file that does not parse is skipped.
-- The app is signed ad hoc, so on another machine Gatekeeper asks once — right click →
-  **Open**. It bundles the collector as a Node single executable, so the machine running
-  it needs no Node.
-- Building needs Node >= 25.5 (for `node --build-sea`) and a Swift toolchain; the
-  Command Line Tools are enough, Xcode is not required.
+- It bundles the collector as a Node single executable, so the machine running it needs
+  no Node. Only building it does: Node >= 25.5 (for `node --build-sea`) and a Swift
+  toolchain; the Command Line Tools are enough, Xcode is not required.
 
 ### The collector on its own
 
