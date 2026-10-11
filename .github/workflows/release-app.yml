@@ -1,0 +1,48 @@
+name: Release app
+
+# Builds, signs and notarizes the macOS app and attaches it to an existing
+# GitHub release — without publishing anything to npm, which Publish does for
+# every version tag. Run it from the Actions tab, or:
+#
+#   gh workflow run release-app.yml -f tag=v0.1.3
+#
+# The app is built from that tag's source, so it carries that version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and attach the app to, e.g. v0.1.3
+        required: true
+        type: string
+
+permissions:
+  contents: write # attach to the release
+
+jobs:
+  app:
+    uses: ./.github/workflows/macos-app.yml
+    with:
+      sign: true
+      ref: ${{ inputs.tag }}
+    secrets: inherit
+
+  attach:
+    needs: app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: app
+          merge-multiple: true
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd app
+          sha256sum Claude-Profiler-macos-*.zip > checksums-app.txt
+          cat checksums-app.txt
+          gh release upload "${{ inputs.tag }}" Claude-Profiler-macos-*.zip checksums-app.txt --clobber \
+            --repo "$GITHUB_REPOSITORY"

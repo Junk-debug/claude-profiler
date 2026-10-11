@@ -2,13 +2,33 @@ name: macOS app
 
 # Builds "Claude Profiler.app" (macos/scripts/bundle.sh) and zips it, once per
 # Mac architecture, as the `app-*` artifacts. Called by CI, to catch an app that
-# no longer builds, and by Publish, to attach it to the release.
+# no longer builds, and by Publish and Release app, to attach it to a release.
+#
+# With `sign: true` the app is signed with the Developer ID certificate and
+# notarized, so it opens with a double click. Without it — CI on a pull
+# request, where secrets are not available — it is signed ad hoc.
+#
+# Secrets (all in the repository's Actions secrets):
+#   MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD  the Developer ID Application
+#                                               certificate and its key, as .p12
+#   MACOS_SIGN_IDENTITY                         "Developer ID Application: …"
+#   APPLE_API_KEY_P8, APPLE_API_KEY_ID,         an App Store Connect API key,
+#   APPLE_API_ISSUER_ID                         for notarization
+# Without the API key the app is signed but not notarized, and says so.
 #
 # The Swift build and the collector's Node single executable both target the
 # machine they run on, hence a runner per architecture.
 
 on:
   workflow_call:
+    inputs:
+      sign:
+        type: boolean
+        default: false
+      ref:
+        description: Tag or commit to build; the caller's own when empty.
+        type: string
+        default: ""
 
 jobs:
   build:
@@ -19,8 +39,12 @@ jobs:
           - { runner: macos-15, target: arm64 }
           - { runner: macos-15-intel, target: x64 }
     runs-on: ${{ matrix.runner }}
+    env:
+      ZIP: Claude-Profiler-macos-${{ matrix.target }}.zip
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -33,22 +57,80 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # A keychain of its own, so the certificate never touches the runner's
+      # login keychain. Apple's intermediate goes in beside it: without it the
+      # identity is found but not valid.
+      - name: Import the signing certificate
+        if: inputs.sign
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          if [ -z "$CERT_P12_BASE64" ] || [ -z "$SIGN_IDENTITY" ]; then
+            echo "::error::sign is set but MACOS_CERT_P12_BASE64 / MACOS_SIGN_IDENTITY are not"
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/g2.cer"
+          security import "$RUNNER_TEMP/g2.cer" -k "$keychain" >/dev/null
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign >/dev/null
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$keychain"
+          echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
+
       - run: macos/scripts/bundle.sh
+
+      - name: Notarize
+        id: notarize
+        if: inputs.sign
+        env:
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          if [ -z "$API_KEY_P8" ] || [ -z "$API_KEY_ID" ] || [ -z "$API_ISSUER_ID" ]; then
+            echo "::warning::APPLE_API_KEY_* are not set; the app is signed but not notarized, and Gatekeeper will still ask"
+            exit 0
+          fi
+          cd macos/build
+          printf '%s' "$API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          # The service takes a zip, not a bundle; this one is thrown away.
+          ditto -c -k --keepParent "Claude Profiler.app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" --wait
+          rm "$RUNNER_TEMP/AuthKey.p8"
+          # Stapling embeds the ticket, so the app opens with no network too.
+          xcrun stapler staple "Claude Profiler.app"
+          echo "notarized=true" >> "$GITHUB_OUTPUT"
 
       - name: Zip the app
         run: |
           cd macos/build
           # ditto, not zip: it keeps the bundle's symlinks and signature intact.
-          ditto -c -k --keepParent "Claude Profiler.app" "Claude-Profiler-macos-${{ matrix.target }}.zip"
+          ditto -c -k --keepParent "Claude Profiler.app" "$ZIP"
 
       # What a user gets: the zip, unpacked, still verifies, and its collector
       # starts and answers on an empty home directory.
       - name: Smoke test the zip
         run: |
           rm -rf "$RUNNER_TEMP/app" && mkdir "$RUNNER_TEMP/app"
-          ditto -x -k "macos/build/Claude-Profiler-macos-${{ matrix.target }}.zip" "$RUNNER_TEMP/app"
+          ditto -x -k "macos/build/$ZIP" "$RUNNER_TEMP/app"
           app="$RUNNER_TEMP/app/Claude Profiler.app"
           codesign --verify --deep --strict "$app"
+          if [ "${{ steps.notarize.outputs.notarized }}" = "true" ]; then
+            # Gatekeeper's own verdict, which is what a user's Mac asks.
+            spctl --assess --type execute --verbose=2 "$app"
+            xcrun stapler validate "$app"
+          fi
           mkdir "$RUNNER_TEMP/home"
           HOME="$RUNNER_TEMP/home" "$app/Contents/Resources/cprof-live" --once | grep -q '"type":"snapshot"'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$(node -p "require('./package.json').version")"
@@ -56,5 +138,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.target }}
-          path: macos/build/Claude-Profiler-macos-${{ matrix.target }}.zip
+          path: macos/build/${{ env.ZIP }}
           if-no-files-found: error

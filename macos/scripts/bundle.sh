@@ -4,10 +4,12 @@
 # on the machine it runs on.
 #
 #   macos/scripts/bundle.sh            → macos/build/Claude Profiler.app
+#   SIGN_IDENTITY="Developer ID Application: …" macos/scripts/bundle.sh
+#                                      → signed for distribution (hardened runtime)
 #
 # Needs Node >= 25.5 (for `node --build-sea`), pnpm and the Swift toolchain
-# (the Command Line Tools are enough). The app is signed ad hoc: it runs on
-# this machine; on another one Gatekeeper asks once (right click → Open).
+# (the Command Line Tools are enough). Without SIGN_IDENTITY the app is signed ad
+# hoc: it runs on this machine; on another one Gatekeeper asks once.
 set -euo pipefail
 
 MACOS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -71,10 +73,18 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-echo "› signing (ad hoc)"
 # Inside out: the embedded executable first, then the bundle that seals it.
-codesign --force --sign - "$APP/Contents/Resources/cprof-live"
-codesign --force --sign - "$APP"
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  echo "› signing as $SIGN_IDENTITY"
+  # Hardened runtime and a secure timestamp are what notarization requires.
+  codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" \
+    --entitlements "$MACOS_DIR/scripts/collector.entitlements" "$APP/Contents/Resources/cprof-live"
+  codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$APP"
+else
+  echo "› signing (ad hoc)"
+  codesign --force --sign - "$APP/Contents/Resources/cprof-live"
+  codesign --force --sign - "$APP"
+fi
 
 rm -rf "$BUILD_DIR/sea"
 echo "✓ $APP"

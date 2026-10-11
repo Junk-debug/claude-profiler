@@ -135,6 +135,9 @@ jobs:
 
   app:
     uses: ./.github/workflows/macos-app.yml
+    with:
+      sign: true
+    secrets: inherit
 
   # Attaches the macOS app, zipped per architecture, to the release. Its
   # checksums go in a file of their own: install.sh reads checksums.txt and
