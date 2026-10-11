@@ -38,22 +38,6 @@ Check that it worked:
 claude-profiler --version
 ```
 
-### Standalone build details
-
-- **Where it goes.** The install scripts put it in `~/.local/bin` (`%USERPROFILE%\.local\bin`
-  on Windows, which `install.ps1` adds to your `PATH`). If `~/.local/bin` is not on your
-  `PATH` on macOS or Linux, the script tells you so. Set `CPROF_INSTALL_DIR` to install
-  somewhere else.
-- **Checksums.** The scripts verify the archive against the release's `checksums.txt`
-  before installing anything.
-- **Pinning a version.** Set `CPROF_VERSION`, for example
-  `curl -fsSL https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.sh | CPROF_VERSION=0.1.3 sh`.
-  With npm, use `npm install -g claude-profiler@0.1.3`. Homebrew and Scoop always follow
-  the latest release.
-- **Not code-signed.** Windows may warn about an unrecognized app the first time you run
-  it. On macOS the executable is only signed ad hoc, so one you download in a browser may
-  be blocked by Gatekeeper; clear that with `xattr -d com.apple.quarantine <file>`.
-
 ### Update
 
 | Installed with | Update with |
