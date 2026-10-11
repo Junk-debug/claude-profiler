@@ -27,10 +27,14 @@ and the short `cprof`.
 | Windows, Scoop | Scoop | `scoop bucket add softjey https://github.com/Softjey/scoop-bucket` then `scoop install claude-profiler` |
 | Windows | install script | `irm https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.ps1 \| iex` |
 | Anything else | download by hand | an archive from the [releases](https://github.com/Softjey/claude-profiler/releases) page |
+| A Mac, and you want it in the menu bar | the app | `Claude-Profiler-macos-*.zip` from the [latest release](https://github.com/Softjey/claude-profiler/releases/latest); see [Menu bar app](#menu-bar-app-macos) |
 
 The `npx` and `npm` methods need Node.js 22 or newer. The rest are the **standalone build**:
 one executable that carries its own Node, so nothing else has to be installed. It exists
 for macOS, Linux and Windows, on arm64 and x64.
+
+The **menu bar app** is a separate download, for macOS only. It is not needed to use the
+terminal UI, and the terminal UI is not needed to use it: the app carries its own collector.
 
 Check that it worked:
 
@@ -47,6 +51,7 @@ claude-profiler --version
 | Homebrew | `brew upgrade claude-profiler` |
 | Scoop | `scoop update claude-profiler` |
 | install script | run it again; it upgrades in place, so hooks you registered keep working |
+| menu bar app | quit it, then replace it with the new release's `Claude Profiler.app` |
 
 ### Uninstall
 
@@ -59,7 +64,9 @@ claude-profiler uninstall-hooks
 
 Then remove the program the way you installed it: `npm uninstall -g claude-profiler`,
 `brew uninstall claude-profiler`, `scoop uninstall claude-profiler`, or, for the install
-scripts, delete `claude-profiler` and `cprof` from the install directory.
+scripts, delete `claude-profiler` and `cprof` from the install directory. The menu bar app is
+removed by turning off **Launch at login** in its settings, quitting it and moving
+`Claude Profiler.app` to the Trash.
 
 ## What it looks like
 
@@ -214,18 +221,16 @@ the same files, so one collector covers all three.
 Download `Claude-Profiler-macos-arm64.zip` (Apple Silicon) or
 `Claude-Profiler-macos-x64.zip` (Intel) from the
 [latest release](https://github.com/Softjey/claude-profiler/releases/latest), unzip it and
-drag **Claude Profiler** to Applications. macOS 14 or later; it needs no Node.
+drag **Claude Profiler** to Applications, then open it. macOS 14 or later; it needs no Node.
+Not sure which Mac you have? Apple menu → **About This Mac**: "Chip: Apple M…" is arm64.
 
-The app is signed ad hoc, not notarized, so macOS blocks it the first time. Either
-right click → **Open** (macOS 14), or on macOS 15 and later open **System Settings →
-Privacy & Security** and press **Open Anyway**. From a terminal, this does the same:
+It is signed with a Developer ID certificate and notarized by Apple, so it opens with a
+double click. `checksums-app.txt` on the release has the SHA-256 of each zip.
 
-```sh
-xattr -dr com.apple.quarantine "/Applications/Claude Profiler.app"
-```
-
-The release also has `checksums-app.txt` with the SHA-256 of each zip. To build it
-yourself instead (Node >= 25.5 and a Swift toolchain; the Command Line Tools are enough):
+If you build it yourself it is signed ad hoc instead, and macOS asks once: right click →
+**Open** (macOS 14), or on macOS 15 and later **System Settings → Privacy & Security →
+Open Anyway**. You need Node >= 25.5 and a Swift toolchain; the Command Line Tools are
+enough:
 
 ```sh
 macos/scripts/bundle.sh         # → macos/build/Claude Profiler.app
