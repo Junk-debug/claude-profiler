@@ -32,3 +32,6 @@ jobs:
 
   macos-app:
     uses: ./.github/workflows/macos-app.yml
+    with:
+      sign: true
+    secrets: inherit
