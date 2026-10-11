@@ -6,6 +6,12 @@ name: Publish
 #   pnpm version patch   # or minor / major — bumps package.json and tags vX.Y.Z
 #   git push --follow-tags
 #
+# A tag with a prerelease part (v0.2.0-canary.0) is a canary, for testing this
+# pipeline end to end without reaching anyone: npm gets it under the `canary`
+# dist-tag, the GitHub release is a prerelease (so `releases/latest`, which
+# install.sh reads, skips it), and the tap and bucket get a separate
+# `claude-profiler-canary` package instead of replacing the real one.
+#
 # Authenticates through npm Trusted Publishing (OIDC), so no npm token is stored
 # in the repository; provenance is attached automatically.
 
@@ -57,12 +63,20 @@ jobs:
 
       # prepublishOnly runs `pnpm verify` (build + tests) before anything is uploaded.
       - if: steps.registry.outputs.published != 'true'
-        run: npm publish
+        run: |
+          case "$GITHUB_REF_NAME" in
+            *-*) npm publish --tag canary ;;
+            *) npm publish ;;
+          esac
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+        run: |
+          flags=()
+          [[ "$GITHUB_REF_NAME" == *-* ]] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${flags[@]}"
+        shell: bash
 
   binaries:
     uses: ./.github/workflows/binaries.yml
@@ -104,15 +118,17 @@ jobs:
             exit 0
           fi
           version="${GITHUB_REF_NAME#v}"
-          publish() { # <repo> <path in it> <generator>
+          package=claude-profiler
+          [[ "$version" == *-* ]] && package=claude-profiler-canary
+          publish() { # <repo> <path in it> <generator> [generator args]
             git clone "https://x-access-token:$REPOS_TOKEN@github.com/Softjey/$1.git" "$1"
             mkdir -p "$1/$(dirname "$2")"
-            "$3" "$version" binaries/checksums.txt > "$1/$2"
+            "$3" "$version" binaries/checksums.txt "${@:4}" > "$1/$2"
             git -C "$1" add "$2"
             git -C "$1" -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "claude-profiler $version"
             git -C "$1" push
           }
-          publish homebrew-tap Formula/claude-profiler.rb scripts/homebrew-formula.sh
-          publish scoop-bucket bucket/claude-profiler.json scripts/scoop-manifest.sh
+          publish homebrew-tap "Formula/$package.rb" scripts/homebrew-formula.sh "$package"
+          publish scoop-bucket "bucket/$package.json" scripts/scoop-manifest.sh
