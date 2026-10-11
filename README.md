@@ -15,40 +15,51 @@ npx claude-profiler "fix flaky login test"
 
 ## Install
 
-With Node.js 22+, run it through `npx` as above, or install it globally:
+Pick one. Every method gives you the same program, under both names: `claude-profiler`
+and the short `cprof`.
+
+| You have | Use | Command |
+| --- | --- | --- |
+| Node.js 22+ | npx (no install) | `npx claude-profiler <query>` |
+| Node.js 22+ | npm, global | `npm install -g claude-profiler` |
+| macOS or Linux, Homebrew | Homebrew | `brew install softjey/tap/claude-profiler` |
+| macOS or Linux | install script | `curl -fsSL https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.sh \| sh` |
+| Windows, Scoop | Scoop | `scoop bucket add softjey https://github.com/Softjey/scoop-bucket` then `scoop install claude-profiler` |
+| Windows | install script | `irm https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.ps1 \| iex` |
+| Anything else | download by hand | an archive from the [releases](https://github.com/Softjey/claude-profiler/releases) page |
+
+The `npx` and `npm` methods need Node.js 22 or newer. The rest are the **standalone build**:
+one executable that carries its own Node, so nothing else has to be installed. It exists
+for macOS, Linux and Windows, on arm64 and x64.
+
+Check that it worked:
 
 ```sh
-npm install -g claude-profiler
+claude-profiler --version
 ```
 
-Without Node, or with an older one, use the standalone build. It is one executable that
-carries its own Node, for macOS, Linux and Windows on arm64 and x64.
+### Update
 
-macOS and Linux:
+| Installed with | Update with |
+| --- | --- |
+| npx | nothing to do; `npx claude-profiler@latest` forces a fresh copy |
+| npm | `npm install -g claude-profiler@latest` |
+| Homebrew | `brew upgrade claude-profiler` |
+| Scoop | `scoop update claude-profiler` |
+| install script | run it again; it upgrades in place, so hooks you registered keep working |
+
+### Uninstall
+
+Remove the hooks first if you registered any, so Claude Code is not left pointing at a
+program that is gone:
 
 ```sh
-brew install softjey/tap/claude-profiler
-# or
-curl -fsSL https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.sh | sh
+claude-profiler uninstall-hooks
 ```
 
-Windows (PowerShell):
-
-```powershell
-scoop bucket add softjey https://github.com/Softjey/scoop-bucket
-scoop install claude-profiler
-# or
-irm https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.ps1 | iex
-```
-
-The install scripts put it in `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows, which
-`install.ps1` adds to your PATH), verify its checksum, and upgrade in place when run again.
-Set `CPROF_INSTALL_DIR` to install elsewhere, or `CPROF_VERSION` to pin a release. You can
-also download an archive from the [releases](https://github.com/Softjey/claude-profiler/releases)
-page yourself. Every method installs it as both `claude-profiler` and `cprof`.
-
-Windows may warn about an unrecognized app the first time you run it, because the
-executable is not code-signed.
+Then remove the program the way you installed it: `npm uninstall -g claude-profiler`,
+`brew uninstall claude-profiler`, `scoop uninstall claude-profiler`, or, for the install
+scripts, delete `claude-profiler` and `cprof` from the install directory.
 
 ## What it looks like
 
