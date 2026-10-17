@@ -9,6 +9,12 @@ import type { Profile } from "../artifact/profile.js";
 export interface ScreenProps {
   profile: Profile;
   nav: NavStack;
+  /**
+   * Switch to another top-level tab by id — what `⏎` on the Overview's Model
+   * or Tools row does, so the bar's buckets lead to the tab that explains
+   * them (the menu bar app's split bar makes the same buckets clickable).
+   */
+  selectTab: (id: string) => void;
 }
 
 /** A screen pushed onto the nav stack (a drill-down level within a tab). */

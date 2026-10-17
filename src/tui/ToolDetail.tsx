@@ -2,7 +2,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import type { ExactToolStat } from "../hooks/sidecar.js";
 import type { BashGroupStat } from "../metrics/bash-groups.js";
 import type { NavScreen, NavStack, ScreenProps } from "./shell.js";
-import { formatMs, formatPercent, truncate } from "./format.js";
+import { formatBytes, formatMs, formatPercent, truncate } from "./format.js";
 import { CallList } from "./CallList.js";
 import { bashGroupCallsScreen } from "./BashGroupCalls.js";
 
@@ -133,7 +133,7 @@ function BashGroupsView({
       )}
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>{note}</Text>
-        <Text dimColor>↑↓ select · ⏎ view commands · Esc back</Text>
+        <Text dimColor>↑↓ select · ⏎ view commands · Esc back · ←→ tabs</Text>
       </Box>
     </Box>
   );
@@ -170,11 +170,10 @@ export function ToolDetailScreen({ tool, profile, nav }: ToolDetailScreenProps):
   // drilling into a call) and later popped back off, same as nav.selection.
   const view = hasViews ? nav.view : VIEW_CALLS;
 
-  useInput((input, key) => {
-    if (!hasViews) return;
-    const step = key.leftArrow ? -1 : key.rightArrow ? 1 : 0;
-    if (step === 0) return;
-    const next = VIEW_ORDER[VIEW_ORDER.indexOf(view as (typeof VIEW_ORDER)[number]) + step];
+  useInput((input) => {
+    // `v`, not `←→`: the arrows always belong to the tab strip (App.tsx).
+    if (!hasViews || input !== "v") return;
+    const next = VIEW_ORDER[(VIEW_ORDER.indexOf(view as (typeof VIEW_ORDER)[number]) + 1) % VIEW_ORDER.length];
     if (next === undefined) return;
     nav.setView(next);
     nav.setSelection(0);
@@ -185,6 +184,16 @@ export function ToolDetailScreen({ tool, profile, nav }: ToolDetailScreenProps):
       <Text bold>
         {tool.name} — {tool.callRefs.length} call{tool.callRefs.length === 1 ? "" : "s"}, {formatMs(tool.totalMs)}{" "}
         total, median {formatMs(tool.medianMs)}
+      </Text>
+      {/* The spread the tool table has no room for in 80 columns, and what
+          only hooks can add — the same figures the menu bar app puts in its
+          own table columns. */}
+      <Text dimColor>
+        p90 {formatMs(tool.p90Ms)} · max {formatMs(tool.maxMs)} · {formatPercent(tool.pctOfSession)} of the session
+        {tool.unfinishedCount > 0 ? ` · ${tool.unfinishedCount} unfinished` : ""}
+        {tool.failedCalls > 0 ? ` · ${tool.failedCalls} failed` : ""}
+        {tool.approvalMs !== null && tool.approvalMs > 0 ? ` · ${formatMs(tool.approvalMs)} waiting for you` : ""}
+        {tool.responseBytes !== null ? ` · ${formatBytes(tool.responseBytes)} of results` : ""}
       </Text>
       {hasViews ? (
         <Box marginTop={1}>
@@ -200,7 +209,7 @@ export function ToolDetailScreen({ tool, profile, nav }: ToolDetailScreenProps):
             <Text {...(view === VIEW_CALLS ? { color: "cyan", bold: true } : { dimColor: true })}>
               [Calls]
             </Text>
-            <Text dimColor>  ←→ switch view</Text>
+            <Text dimColor>  v switch view</Text>
           </Text>
         </Box>
       ) : null}

@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import type { HookInsights } from "../metrics/hook-insights.js";
-import { formatCount, formatMs, truncate } from "./format.js";
+import { formatBytes, formatCount, formatMs, formatUsd, truncate } from "./format.js";
 import { registerTab, type ScreenProps } from "./shell.js";
 
 const LABEL_WIDTH = 22;
@@ -13,16 +13,6 @@ const LABEL_WIDTH = 22;
  * note right instead of breaking.
  */
 const VALUE_MIN_WIDTH = 16;
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${Math.round(bytes)} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
-function formatUsd(usd: number | null): string {
-  return usd === null ? "—" : `$${usd.toFixed(4)}`;
-}
 
 /** A label/value line. `note` is the "why this number means what it does" text. */
 function Row({

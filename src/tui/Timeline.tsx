@@ -4,7 +4,7 @@ import type { ExactToolStat } from "../hooks/sidecar.js";
 import type { ToolCall } from "../metrics/tool-stats.js";
 import type { ContextPoint } from "../metrics/context.js";
 import { registerTab, type NavScreen, type ScreenProps } from "./shell.js";
-import { formatCount, formatDateTime, formatMs, truncate } from "./format.js";
+import { formatClock, formatCount, formatMs, truncate } from "./format.js";
 import { callDetailScreen } from "./CallDetail.js";
 import { promptPointDetailScreen } from "./PromptPointDetail.js";
 
@@ -13,6 +13,7 @@ const VISIBLE_ROWS = 15;
 interface TurnRow {
   index: number;
   startMs: number | null;
+  modelMs: number;
   toolsMs: number;
   calls: ToolCall[];
   trigger: string | null;
@@ -37,6 +38,7 @@ function buildTurnRows(profile: Profile): TurnRow[] {
   const rows: TurnRow[] = Array.from({ length: profile.session.turnCount }, (_, index) => ({
     index,
     startMs: null,
+    modelMs: 0,
     toolsMs: 0,
     calls: [],
     trigger: null,
@@ -52,6 +54,13 @@ function buildTurnRows(profile: Profile): TurnRow[] {
     if (!row) continue;
     row.trigger = prompt.preview;
     noteStart(row, parseMs(prompt.at));
+  }
+
+  for (const request of profile.modelBreakdown.requests) {
+    const row = rows[request.turnIndex];
+    if (!row) continue;
+    row.modelMs += request.totalMs;
+    noteStart(row, parseMs(request.at));
   }
 
   for (const tool of profile.tools) {
@@ -120,21 +129,27 @@ export function TimelineScreen({ profile, nav }: ScreenProps): React.JSX.Element
   return (
     <Box flexDirection="column">
       <Text bold>Timeline — {rows.length} turns</Text>
+      <Text dimColor>
+        Span is wall clock to the next turn, so it also holds whatever idle time preceded that turn.
+      </Text>
       <Box marginTop={1}>
         <Box width={5}>
           <Text bold>Turn</Text>
         </Box>
-        <Box width={18}>
+        <Box width={10}>
           <Text bold>Started</Text>
         </Box>
         <Box width={9}>
           <Text bold>Span</Text>
         </Box>
-        <Box width={7}>
+        <Box width={9}>
+          <Text bold>Model</Text>
+        </Box>
+        <Box width={9}>
           <Text bold>Tools</Text>
         </Box>
-        <Box width={12}>
-          <Text bold>Tools time</Text>
+        <Box width={6}>
+          <Text bold>Calls</Text>
         </Box>
         <Box width={38}>
           <Text bold>Trigger</Text>
@@ -152,17 +167,20 @@ export function TimelineScreen({ profile, nav }: ScreenProps): React.JSX.Element
               <Box width={5}>
                 <Text color={color}>{row.index}</Text>
               </Box>
-              <Box width={18}>
-                <Text color={color}>{row.startMs === null ? "—" : formatDateTime(new Date(row.startMs).toISOString())}</Text>
+              <Box width={10}>
+                <Text color={color}>{row.startMs === null ? "—" : formatClock(new Date(row.startMs).toISOString())}</Text>
               </Box>
               <Box width={9}>
                 <Text color={color}>{span === null ? "—" : formatMs(span)}</Text>
               </Box>
-              <Box width={7}>
-                <Text color={color}>{row.calls.length}</Text>
+              <Box width={9}>
+                <Text color={color}>{row.modelMs > 0 ? formatMs(row.modelMs) : "—"}</Text>
               </Box>
-              <Box width={12}>
+              <Box width={9}>
                 <Text color={color}>{row.toolsMs > 0 ? formatMs(row.toolsMs) : "—"}</Text>
+              </Box>
+              <Box width={6}>
+                <Text color={color}>{row.calls.length}</Text>
               </Box>
               <Box width={38}>
                 <Text color={color}>{truncate(triggerPreview(row), 37)}</Text>
@@ -192,7 +210,7 @@ function callTurnEvent(call: ToolCall, tool: ExactToolStat): TurnEvent {
     render: (selected) => (
       <Text {...(selected ? { color: "cyan" as const } : {})}>
         {selected ? "> " : "  "}
-        {formatDateTime(call.startedAt)} · {tool.name} ·{" "}
+        {formatClock(call.startedAt)} · {tool.name} ·{" "}
         {call.durationMs === null ? "unfinished" : formatMs(call.durationMs)}
       </Text>
     ),
@@ -207,7 +225,7 @@ function assistantTurnEvent(point: ContextPoint, key: string): TurnEvent {
     render: (selected) => (
       <Text {...(selected ? { color: "cyan" as const } : {})}>
         {selected ? "> " : "  "}
-        {formatDateTime(point.at)} · assistant message · cache read {formatCount(point.cacheReadTokens)} · output{" "}
+        {formatClock(point.at)} · assistant message · cache read {formatCount(point.cacheReadTokens)} · output{" "}
         {formatCount(point.outputTokens)} · thinking {formatCount(point.thinkingTokens)}
       </Text>
     ),
@@ -219,7 +237,11 @@ function assistantTurnEvent(point: ContextPoint, key: string): TurnEvent {
 function TurnDetailScreen({ profile, turnIndex, nav }: ScreenProps & { turnIndex: number }): React.JSX.Element {
   // nav.selection, not local useState: see Overview.tsx's comment on the same pattern.
   const selectedIndex = nav.selection;
-  const trigger = profile.prompts.find((p) => p.turnIndex === turnIndex)?.preview ?? null;
+  // `full` (4000 chars), not the 37-column `preview` the list row shows: this
+  // screen is where a prompt gets read, so it prints as much of it as the
+  // artifact kept.
+  const prompt = profile.prompts.find((p) => p.turnIndex === turnIndex) ?? null;
+  const trigger = prompt === null ? null : prompt.full || prompt.preview;
 
   const callEvents = profile.tools.flatMap((tool) =>
     tool.callRefs.filter((c) => c.turnIndex === turnIndex).map((c) => callTurnEvent(c, tool)),

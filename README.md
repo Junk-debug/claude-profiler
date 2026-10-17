@@ -27,10 +27,14 @@ and the short `cprof`.
 | Windows, Scoop | Scoop | `scoop bucket add softjey https://github.com/Softjey/scoop-bucket` then `scoop install claude-profiler` |
 | Windows | install script | `irm https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.ps1 \| iex` |
 | Anything else | download by hand | an archive from the [releases](https://github.com/Softjey/claude-profiler/releases) page |
+| A Mac, and you want it in the menu bar | the app | `Claude-Profiler-macos-*.zip` from the [latest release](https://github.com/Softjey/claude-profiler/releases/latest); see [Menu bar app](#menu-bar-app-macos) |
 
 The `npx` and `npm` methods need Node.js 22 or newer. The rest are the **standalone build**:
 one executable that carries its own Node, so nothing else has to be installed. It exists
 for macOS, Linux and Windows, on arm64 and x64.
+
+The **menu bar app** is a separate download, for macOS only. It is not needed to use the
+terminal UI, and the terminal UI is not needed to use it: the app carries its own collector.
 
 Check that it worked:
 
@@ -47,6 +51,7 @@ claude-profiler --version
 | Homebrew | `brew upgrade claude-profiler` |
 | Scoop | `scoop update claude-profiler` |
 | install script | run it again; it upgrades in place, so hooks you registered keep working |
+| menu bar app | quit it, then replace it with the new release's `Claude Profiler.app` |
 
 ### Uninstall
 
@@ -59,37 +64,34 @@ claude-profiler uninstall-hooks
 
 Then remove the program the way you installed it: `npm uninstall -g claude-profiler`,
 `brew uninstall claude-profiler`, `scoop uninstall claude-profiler`, or, for the install
-scripts, delete `claude-profiler` and `cprof` from the install directory.
+scripts, delete `claude-profiler` and `cprof` from the install directory. The menu bar app is
+removed by turning off **Launch at login** in its settings, quitting it and moving
+`Claude Profiler.app` to the Trash.
 
 ## What it looks like
 
 Captured from a real 30-minute session (session id and project path replaced):
 
 ```text
+Fix the flaky upload test
 Session  1c128c06-…
 Project  ~/code/my-app
-Started  2026-09-19 21:07
-Span     29m45s
-Cost     —
-Models   claude-opus-5
-Turns    12
+Ran      2026-09-19 21:07 · span 30m · 12 turns · 143 requests
+Usage    26M tokens · cost — · Opus 5
 
-[1/4] Overview  Timeline  Context  Hooks
+[1/7] Overview  Tools  Model  Timeline  Context  Hooks  Subagents
 
-  Model      ███████░░░░░░░░░░░░░░░░░░░░░░░ 24.7% (7m20s)
-> Tools      ██████████░░░░░░░░░░░░░░░░░░░░ 32.4% (9m39s)
-  You        █████████████░░░░░░░░░░░░░░░░░ 42.8% (12m44s)
+  Model      ███████░░░░░░░░░░░░░░░░░░░░░░░ 25% (7m 20s)
+> Tools      ██████████░░░░░░░░░░░░░░░░░░░░ 32% (9m 39s)
+  You        █████████████░░░░░░░░░░░░░░░░░ 43% (12m 44s)
   Unaccounted░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 0.1% (1.6s)
 
-sorted by total · 5 tools
-Tool                               Total     %       Calls  Median
-> Bash                             9m30s     31.9%   59     3.1s
-  WebFetch                         6.4s      0.4%    1      6.4s
-  Edit                             2.3s      0.1%    2      1.2s
-  Write                            1.4s      0.1%    1      1.4s
-  ToolSearch                       103ms     0.0%    1      103ms
+3 tools · 121 calls
+Bash                  ████████████████████ 9m 30s (59×, 32%)
+WebFetch              ░░░░░░░░░░░░░░░░░░░░ 6.4s (1×, 0.4%)
+Edit                  ░░░░░░░░░░░░░░░░░░░░ 2.3s (2×, 0.1%)
 
-↑↓ select · ⏎ drill in · Esc back · ←→ tabs · s sort · / filter · q quit
+↑↓ category · ⏎ Tools tab · ←→ tabs · q quit
 ```
 
 - **Model**: time Claude spent producing responses.
@@ -123,42 +125,49 @@ printed instead so you can rerun with a more specific query.
 
 ## Screens
 
-Four tabs; `←` `→` switches between them.
+Seven tabs; `←` `→` switches between them, at any depth. They are the same seven, in the
+same order, as the [menu bar app](#menu-bar-app-macos) — the two read the same profile
+artifact, so a figure that appears in both is the same number, formatted the same way.
 
-- **Overview** shows the time split. Select **Model** to see thinking vs. output tokens
-  and how much context was read from cache. Select **Tools** for the table above. Select
-  **You** for the list of pauses before each of your prompts.
-- **Timeline** lists every turn with its span, tool count, tool time and the prompt that
-  started it.
-- **Context** shows sparklines of context size, output tokens and thinking tokens over the
-  session.
-- **Hooks** shows data that only hooks can record: approval time, failed calls, result
-  sizes per tool, and cache-rewrite cost. Without hooks, this tab says so.
+| Tab | What it shows |
+| --- | --- |
+| Overview | The time split, and what each bucket holds: your prompts and how long each took to write, the unaccounted causes, the heaviest tools, the token mix |
+| Tools | Every tool, sortable and filterable, then a tool's calls, then one call |
+| Model | One row per API request, or the same time rolled up by cause, model and effort |
+| Timeline | One row per turn: when it started, its span, model time, tool time and the prompt that started it |
+| Context | Context, output and thinking per request, plus the session totals |
+| Hooks | What only hooks record: approval time, retry tax, result sizes, cache rewrites, lifecycle, slash-command cost, streaming, loaded instructions |
+| Subagents | Every subagent, with its own split, tools and calls |
 
-Drilling in from Overview:
+Drilling in:
 
-- **Tools → a tool → a call**: individual calls sorted by duration, then one call's
-  details. `←` `→` on **Bash** switches to a view grouped by command. An **Agent** or
-  **Task** call opens its subagent's own breakdown.
-- **Model → requests**: one row per API request.
+- **Overview → Model / Tools** opens that bucket's own tab. **You** and **Unaccounted**
+  open in place, and `⏎` on a prompt shows its full text.
+- **Tools → a tool → a call**: calls sorted by duration, then one call's input. `v` on
+  **Bash** cycles by-recipe, by-command and the raw call list. An **Agent** or **Task**
+  call opens its subagent.
+- **Model → a request**: everything the transcript knows about one API call, including
+  what it wrote.
 
   ```text
-    #   Started           Total    1st blk  Out    tok/s   Ctx     Cause
-  > 23  2026-09-19 21:14  27.4s    3.3s     4.0k   146.0   73.6k   after Bash
-    21  2026-09-19 21:14  22.7s    4.9s     3.1k   138.1   68.5k   after Bash
-    19  2026-09-19 21:14  20.3s    19.2s    2.1k   101.2   60.5k   after Bash
+    #   Started   Total    1st blk  Out    tok/s   Ctx     Cause
+  > 23  21:14:02  27s      3.3s     4.0k   146.0   74k     after Bash
+    21  21:14:31  23s      4.9s     3.1k   138.1   69k     after Bash
+    19  21:14:58  20s      19s      2.1k   101.2   61k     after Bash
   ```
 
-  Use `←` `→` to switch to the same time grouped by cause, model and thinking effort.
+  `v` switches to the same time grouped by cause, model and thinking effort.
+- **Timeline → a turn**: every tool call and assistant message in it, in order.
 
 ### Keys
 
 | Key | Action |
 | --- | --- |
-| `←` `→` | Switch tabs. On a drilled-in screen, switch that screen's view |
+| `←` `→` | Switch tabs — always, drilled in or not |
 | `↑` `↓` | Move the selection |
-| `⏎` | Go deeper: into a category's table, then into the selected row |
+| `⏎` | Go deeper, or open the tab that owns the selected bucket |
 | `Esc` | Go back one level |
+| `v` | Switch a screen's own view (Bash lenses, Model requests vs. rollups) |
 | `s` | Change sort order (tool table, request list) |
 | `/` | Filter the tool table by name |
 | `x` | Hide or show stalled time (shown only when the session has any) |
@@ -199,6 +208,103 @@ With hooks installed, you get:
 - **Idle** as its own row. When you resume an old session, the days it sat closed are
   moved out of **You**.
 - A **Hooks** tab showing failed calls, result sizes per tool and cache-rewrite cost.
+
+## Menu bar app (macOS)
+
+`claude-profiler` profiles one session after the fact. The menu bar app answers the other
+question — **what is running right now** — for every Claude Code front end at once: the
+CLI, the VS Code extension and Claude Desktop's Code tab all run the same binary and write
+the same files, so one collector covers all three.
+
+### Install
+
+Download `Claude-Profiler-macos-arm64.zip` (Apple Silicon) or
+`Claude-Profiler-macos-x64.zip` (Intel) from the
+[latest release](https://github.com/Softjey/claude-profiler/releases/latest), unzip it and
+drag **Claude Profiler** to Applications, then open it. macOS 14 or later; it needs no Node.
+Not sure which Mac you have? Apple menu → **About This Mac**: "Chip: Apple M…" is arm64.
+
+It is signed with a Developer ID certificate and notarized by Apple, so it opens with a
+double click. `checksums-app.txt` on the release has the SHA-256 of each zip.
+
+If you build it yourself it is signed ad hoc instead, and macOS asks once: right click →
+**Open** (macOS 14), or on macOS 15 and later **System Settings → Privacy & Security →
+Open Anyway**. You need Node >= 25.5 and a Swift toolchain; the Command Line Tools are
+enough:
+
+```sh
+macos/scripts/bundle.sh         # → macos/build/Claude Profiler.app
+open "macos/build/Claude Profiler.app"
+```
+
+The menu bar shows how many sessions are working and today's token total. The popover
+lists each session with its source, state, model, context size, tokens, CPU and memory,
+plus a tokens-per-minute sparkline and — with hooks installed — the tool running right
+now. Optional notifications fire when Claude finishes a long run or waits for approval.
+
+Click a session and you get **everything the terminal UI has**, for that session, kept up
+to date as it runs — the app asks the collector for the same profile artifact the CLI
+builds, so no metric is computed twice. The tabs are [the same seven](#screens), in the
+same order, showing the same figures; only the input differs, since a window can offer a
+column header to sort by and a terminal cannot:
+
+| Tab | In the app |
+| --- | --- |
+| Overview | The split bar, with clickable Model and Tools buckets and a toggle for stalled time; resumes; your prompts; the unaccounted causes; the heaviest tools; the token mix |
+| Tools | The full table, sortable by any column and filterable, with the selected tool's calls, its Bash lenses, and a call's own detail |
+| Model | Five views of the Model bucket: the token split (by type), the time by cause, by model and by effort, and one row per request — click one for its full detail |
+| Timeline | One row per turn, with its span and its model/tool split; click a turn for its whole prompt and its events |
+| Context | Context and output per request as charts, with min/max/final and the session totals |
+| Hooks | All eleven sections, the same ones the terminal UI prints |
+| Subagents | Each subagent's own split, tools and calls |
+
+**If you can't find the icon**, your menu bar is full: macOS drops the items that do not
+fit, silently, and a newly launched app goes to the back of the queue. The same window is
+always reachable without it:
+
+```sh
+open -a "Claude Profiler"   # opens the session list, icon or no icon
+```
+
+It also opens by itself on first launch. To win back space, quit another menu bar app, or
+set **Show → Icon only** in the app's settings. An app with long menus, such as VS Code,
+takes room from the same bar, so an item that is hidden there can reappear in Finder.
+
+What it reads, every one to five seconds:
+
+| Source | What it gives |
+| --- | --- |
+| `~/.claude/projects/**/*.jsonl` | tokens, context size, model, title, subagents |
+| `~/.claude/sessions/<pid>.json` | which sessions are running, and busy vs. idle |
+| `ps` over each session's process tree | CPU and memory, including MCP servers and tools |
+| `~/.claude/profiler/<id>.jsonl` | the running tool and pending approvals (needs hooks) |
+
+Notes and limits:
+
+- **Regular Claude Desktop chats are not shown.** They run on Anthropic's servers and
+  leave no local token record. Desktop's Code tab is shown in full.
+- **Cost stays blank for live sessions.** Claude Code writes its `cost-state` record only
+  when the session's process exits, so a running one — and one that was killed — has none,
+  and this tool never estimates cost from tokens.
+- `~/.claude/sessions/` is Claude Code's own internal format. Every field is treated as
+  optional, and a file that does not parse is skipped.
+- It bundles the collector as a Node single executable, so the machine running it needs
+  no Node. Only building it does: Node >= 25.5 (for `node --build-sea`) and a Swift
+  toolchain; the Command Line Tools are enough, Xcode is not required.
+
+### The collector on its own
+
+```sh
+claude-profiler live          # NDJSON snapshot stream, one line per change
+claude-profiler live --once   # one snapshot, then exit
+```
+
+Each line is a complete snapshot — a consumer never merges deltas. Send
+`{"cmd":"rate","ms":1000}` on stdin to change the polling interval, `{"cmd":"refresh"}`
+to force one now, or `{"cmd":"profile","id":"<session>"}` to get that session's full
+profile artifact back on the same stream — the object `--json` writes, rebuilt only once
+the transcript has grown. The collector exits when its stdin closes, so it never outlives the app
+that spawned it. The shapes are in [`src/live/protocol.ts`](src/live/protocol.ts).
 
 ## How to read the numbers
 
@@ -242,7 +348,22 @@ your machine.
 pnpm install
 pnpm verify         # build + unit tests
 pnpm build:binary   # the standalone executable for this machine (needs Node >= 25.5)
+pnpm macos:test     # Swift tests for the menu bar app
+pnpm macos:build    # assemble Claude Profiler.app
 ```
+
+While working on the app, point it at a collector built from the checkout instead of the
+bundled one, and render a view to a PNG without clicking through the menu bar:
+
+```sh
+export CPROF_LIVE="node $PWD/dist/live/main.js"
+swift run --package-path macos ClaudeProfilerBar
+macos/.build/debug/ClaudeProfilerBar --render-png shot.png [--tab tools] [--dark]
+```
+
+`--render-png` draws the popover, or a detail tab with `--tab`, from real collector data.
+`CPROF_PROFILE_JSON=<a --json artifact> pnpm macos:test` additionally checks that the
+Swift models still decode a profile from one of your own sessions.
 
 `test/corpus.test.ts` runs against your real transcripts in `~/.claude/projects/` and is
 skipped when that directory doesn't exist, as in CI.

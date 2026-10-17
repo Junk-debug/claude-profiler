@@ -4,6 +4,12 @@ export interface PromptPoint {
   turnIndex: number;
   at: string | null;
   preview: string;
+  /**
+   * The same prompt, capped much higher than `preview` (build-model.ts's
+   * DETAIL_FULL_MAX_CHARS) — what a turn's drill-down shows, so reading the
+   * prompt that started a turn does not mean going back to the transcript.
+   */
+  full: string;
 }
 
 /**
@@ -16,7 +22,7 @@ export function computePrompts(events: ModelEvent[]): PromptPoint[] {
   const prompts: PromptPoint[] = [];
   for (const event of events) {
     if (event.type !== "user_prompt") continue;
-    prompts.push({ turnIndex: event.turnIndex, at: event.at, preview: event.preview });
+    prompts.push({ turnIndex: event.turnIndex, at: event.at, preview: event.preview, full: event.full });
   }
   return prompts;
 }

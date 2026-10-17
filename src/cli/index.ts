@@ -4,17 +4,23 @@ import { looksLikeSessionId, resolveSession, type SessionListing } from "./resol
 import { SessionPicker } from "../tui/SessionPicker.js";
 import { Spinner } from "../tui/Spinner.js";
 import { App } from "../tui/App.js";
-// Registers the Timeline, Context and Hooks tabs as an import side effect,
-// same mechanism as App.tsx's own "./Overview.js" import — order here fixes
-// the `⇥` cycle order (Overview, pulled in by App.js above, then Timeline,
-// then Context, then Hooks) without App.tsx needing to know about them.
+// Registers the remaining tabs as an import side effect, same mechanism as
+// App.tsx's own "./Overview.js" import — the order here fixes the `←→` cycle
+// order without App.tsx needing to know about any of them. It is the same
+// order the menu bar app lists in its own tab picker
+// (SessionDetailView.Tab.allCases), so "the third tab" means the same thing
+// in both.
+import "../tui/Tools.js";
+import "../tui/Model.js";
 import "../tui/Timeline.js";
 import "../tui/Context.js";
 import "../tui/Hooks.js";
+import "../tui/Subagents.js";
 import { buildProfile, type Profile } from "../artifact/profile.js";
 import { writeProfileArtifact } from "../artifact/write.js";
 import { areHooksInstalled, installHooks } from "../hooks/install.js";
 import { uninstallHooks } from "../hooks/uninstall.js";
+import { runLive } from "../live/run.js";
 
 export interface CliArgs {
   query: string | undefined;
@@ -47,6 +53,8 @@ Other commands:
                      Fires once per streaming flush rather than once per turn,
                      so it costs a hook process per flush (~35ms each).
   uninstall-hooks  Remove the hooks that install-hooks added
+  live             Stream NDJSON snapshots of every running or today's session
+    --once           Print one snapshot and exit
 `;
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -166,6 +174,17 @@ export async function run(
     const result = uninstallHooks();
     stdout(result.message);
     return 0;
+  }
+
+  if (argv[0] === "live") {
+    const rest = argv.slice(1);
+    const unknown = rest.filter((arg) => arg !== "--once");
+    if (unknown.length > 0) {
+      stderr(`Unknown option for live: ${unknown[0]}\n\n`);
+      printUsage(stderr);
+      return 1;
+    }
+    return runLive({ once: rest.includes("--once"), version, write: stdout });
   }
 
   let args: CliArgs;

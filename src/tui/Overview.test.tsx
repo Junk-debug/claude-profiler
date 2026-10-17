@@ -92,7 +92,6 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
       suspect: [],
       suspectMs: 0,
       stallThresholdTokensPerSec: 1,
-      contextLatency: null,
       byCause: [{ key: "after your prompt", ms: 3000, requests: 1, pctOfModel: 1 }],
       byModel: [{ key: "claude-sonnet-5", ms: 3000, requests: 1, pctOfModel: 1 }],
       byEffort: [{ key: "high", ms: 3000, requests: 1, pctOfModel: 1 }],
@@ -116,15 +115,17 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
 }
 
 function renderOverview(profile: Profile) {
-  // Mirrors App.tsx's TabHost: real usage pops the nav stack on Esc.
+  // Mirrors App.tsx's TabHost: real usage pops the nav stack on Esc, and
+  // hands the screen a way to switch tabs.
+  const opened: string[] = [];
   function Wrapper(): React.JSX.Element {
     const nav = useNavStack({ id: "overview", render: (props) => createElement(OverviewScreen, props) });
     useInput((_input, key) => {
       if (key.escape && nav.canPop) nav.pop();
     });
-    return nav.current.render({ profile, nav });
+    return nav.current.render({ profile, nav, selectTab: (id) => opened.push(id) });
   }
-  return render(createElement(Wrapper));
+  return { ...render(createElement(Wrapper)), opened };
 }
 
 describe("OverviewScreen", () => {
@@ -136,15 +137,20 @@ describe("OverviewScreen", () => {
     expect(frame).toContain("Context read back");
   });
 
-  it("opens the request list from any stage row on Enter", async () => {
-    const { lastFrame, stdin } = renderOverview(makeProfile());
-    stdin.write("\r"); // into the Model breakdown
+  it("hands Model off to the Model tab on Enter, rather than opening a second copy of it", async () => {
+    const { stdin, opened } = renderOverview(makeProfile());
+    stdin.write("\r");
     await tick();
-    stdin.write("\r"); // and on into the request list
+    expect(opened).toEqual(["model"]);
+  });
+
+  it("hands Tools off to the Tools tab on Enter", async () => {
+    const { stdin, opened } = renderOverview(makeProfile());
+    stdin.write("\u001B[B"); // down arrow: Model -> Tools
     await tick();
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Requests]");
-    expect(frame).toContain("tok/s");
+    stdin.write("\r");
+    await tick();
+    expect(opened).toEqual(["tools"]);
   });
 
   // The shape that made this lens necessary: a session whose Model bucket is
@@ -171,7 +177,7 @@ describe("OverviewScreen", () => {
     const { lastFrame } = renderOverview(makeSleptProfile());
     const frame = lastFrame() ?? "";
 
-    expect(frame).toMatch(/Stalled\s+\S*\s*70\.0%/);
+    expect(frame).toMatch(/Stalled\s+\S*\s*70%/);
     expect(frame).toContain("x hide stalled");
   });
 
@@ -182,8 +188,8 @@ describe("OverviewScreen", () => {
     const frame = lastFrame() ?? "";
 
     // 1s model + 1s tools + 1s you, over a 3s working span.
-    expect(frame).toMatch(/Model\s+\S*\s*33\.3%/);
-    expect(frame).toMatch(/Tools\s+\S*\s*33\.3%/);
+    expect(frame).toMatch(/Model\s+\S*\s*33%/);
+    expect(frame).toMatch(/Tools\s+\S*\s*33%/);
     expect(frame).not.toMatch(/Stalled\s+[█░]/);
     expect(frame).toContain("x show stalled");
     // The Model table under the bar carries no time at all now, so it cannot
@@ -193,7 +199,7 @@ describe("OverviewScreen", () => {
 
     stdin.write("x");
     await tick();
-    expect(lastFrame() ?? "").toMatch(/Stalled\s+\S*\s*70\.0%/);
+    expect(lastFrame() ?? "").toMatch(/Stalled\s+\S*\s*70%/);
   });
 
   it("does not advertise the key on a session with nothing stalled", () => {
@@ -203,73 +209,13 @@ describe("OverviewScreen", () => {
     expect(frame).not.toContain("Stalled");
   });
 
-  it("shows the tool table after moving to the Tools category", async () => {
+  it("summarises the heaviest tools on the Tools category", async () => {
     const { lastFrame, stdin } = renderOverview(makeProfile());
     stdin.write("[B"); // down arrow: Model -> Tools
     await tick();
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Bash");
     expect(frame).toContain("Read");
-  });
-
-  it("cycles the sort key on 's'", async () => {
-    const { lastFrame, stdin } = renderOverview(makeProfile());
-    stdin.write("[B"); // down arrow: Model -> Tools
-    await tick();
-    expect(lastFrame()).toContain("sorted by total");
-    stdin.write("s");
-    await tick();
-    expect(lastFrame()).toContain("sorted by calls");
-  });
-
-  it("filters the tool table on '/'", async () => {
-    const { lastFrame, stdin } = renderOverview(makeProfile());
-    stdin.write("[B"); // down arrow: Model -> Tools
-    await tick();
-    stdin.write("/");
-    await tick();
-    stdin.write("rea");
-    await tick();
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("Read");
-    expect(frame).not.toContain("Bash");
-  });
-
-  it("drills into the selected tool on Enter, and Esc returns to the exact previous selection", async () => {
-    const { lastFrame, stdin } = renderOverview(makeProfile());
-
-    // Move to the "tools" category (default is "model"), then Enter into detail focus
-    stdin.write("[B"); // down arrow: model -> tools
-    await tick();
-    stdin.write("\r");
-    await tick();
-    // select the second row ("Read"), then drill in
-    stdin.write("[B"); // down arrow
-    await tick();
-    stdin.write("\r");
-    await tick();
-    expect(lastFrame()).toContain("Read"); // now inside ToolDetail for "Read"
-
-    stdin.write(""); // Esc
-    await tick();
-    let frame = lastFrame() ?? "";
-    expect(frame).toContain("Bash");
-    expect(frame).toContain("Read");
-    // Back on Overview, focus reset to the category bar (T-fix: the cursor sitting on the
-    // aggregated row above must not also make a row in the table below look selected).
-    let readLine = frame.split("\n").find((l) => l.includes("Read"));
-    let bashLine = frame.split("\n").find((l) => l.includes("Bash"));
-    expect(readLine).not.toContain(">");
-    expect(bashLine).not.toContain(">");
-
-    // Enter again: back in detail focus, "Read" (row 1) is still the preserved selection
-    stdin.write("\r");
-    await tick();
-    frame = lastFrame() ?? "";
-    readLine = frame.split("\n").find((l) => l.includes("Read"));
-    bashLine = frame.split("\n").find((l) => l.includes("Bash"));
-    expect(readLine).toContain(">");
-    expect(bashLine).not.toContain(">");
   });
 
   it("moves the category highlight on up/down arrow, and shows each one's breakdown only after Enter", async () => {

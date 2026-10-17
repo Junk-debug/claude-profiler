@@ -3,6 +3,8 @@ dist/
 *.log
 .DS_Store
 *.tgz
+macos/.build/
+macos/build/
 .vscode/
 .claude/
 build/

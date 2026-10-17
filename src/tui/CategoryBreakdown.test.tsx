@@ -18,7 +18,6 @@ function makeBreakdown(overrides: Partial<ModelBreakdown> = {}): ModelBreakdown 
     suspect: [],
     suspectMs: 0,
     stallThresholdTokensPerSec: 4.2,
-    contextLatency: null,
     byCause: [],
     byModel: [],
     byEffort: [],
@@ -96,8 +95,8 @@ describe("ModelBreakdownTable", () => {
     );
     const frame = lastFrame() ?? "";
     // 2k thinking of 10k output, and no fitted rate anywhere in sight.
-    expect(frame).toMatch(/Thinking\s+\S*\s*20\.0% 2\.0k tokens/);
-    expect(frame).toMatch(/Generating\s+\S*\s*80\.0% 8\.0k tokens/);
+    expect(frame).toMatch(/Thinking\s+\S*\s*20% 2\.0k tokens/);
+    expect(frame).toMatch(/Generating\s+\S*\s*80% 8\.0k tokens/);
     expect(frame).not.toContain("estimated");
   });
 
@@ -111,7 +110,7 @@ describe("ModelBreakdownTable", () => {
     expect(frame).toContain("per request");
     // Each block is normalised in itself, so cache read reads near 100% of
     // input rather than near 100% of everything.
-    expect(frame).toMatch(/Cache read\s+\S*\s*100\.0%/);
+    expect(frame).toMatch(/Cache read\s+\S*\s*100%/);
   });
 
   it("says so plainly when the session reported no tokens at all", () => {

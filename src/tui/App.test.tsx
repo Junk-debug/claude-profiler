@@ -3,8 +3,10 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Profile } from "../artifact/profile.js";
 import { App } from "./App.js";
-// Registers the Timeline and Context tabs too, so tests below can exercise
-// the arrow-key tab switcher — App.tsx itself only ever imports Overview.
+// Registers the Tools, Timeline and Context tabs too, so tests below can
+// exercise the arrow-key tab switcher — App.tsx itself only ever imports
+// Overview.
+import "./Tools.js";
 import "./Timeline.js";
 import "./Context.js";
 
@@ -73,7 +75,6 @@ function makeProfile(): Profile {
       suspect: [],
       suspectMs: 0,
       stallThresholdTokensPerSec: 1,
-      contextLatency: null,
       byCause: [{ key: "after your prompt", ms: 3000, requests: 1, pctOfModel: 1 }],
       byModel: [{ key: "claude-sonnet-5", ms: 3000, requests: 1, pctOfModel: 1 }],
       byEffort: [{ key: "high", ms: 3000, requests: 1, pctOfModel: 1 }],
@@ -97,6 +98,11 @@ describe("App", () => {
   it("renders the Overview tab by default", () => {
     const { lastFrame } = render(createElement(App, { profile: makeProfile() }));
     expect(lastFrame()).toContain("aaaaaaaa-0000-0000-0000-000000000000");
+  });
+
+  it("says why there is no cost instead of leaving a bare dash", () => {
+    const { lastFrame } = render(createElement(App, { profile: makeProfile() }));
+    expect(lastFrame()).toContain("cost — (recorded when the session exits)");
   });
 
   it("quits on 'q'", async () => {
@@ -147,23 +153,23 @@ describe("App", () => {
 
   it("switches and highlights tabs with ←→ instead of Tab", async () => {
     const { lastFrame, stdin } = render(createElement(App, { profile: makeProfile() }));
-    expect(lastFrame()).toContain("[1/3]");
+    expect(lastFrame()).toContain("[1/4]");
 
     stdin.write("\t"); // Tab must no longer switch tabs
     await tick();
-    expect(lastFrame()).toContain("[1/3]");
+    expect(lastFrame()).toContain("[1/4]");
 
     stdin.write("[C"); // →
     await tick();
-    expect(lastFrame()).toContain("[2/3]");
+    expect(lastFrame()).toContain("[2/4]");
     expect(lastFrame()).toContain("Timeline");
 
     stdin.write("[D"); // ←
     await tick();
-    expect(lastFrame()).toContain("[1/3]");
+    expect(lastFrame()).toContain("[1/4]");
   });
 
-  it("gives ←→ to a drilled-into screen instead of cycling tabs (ToolDetail's Bash view toggle)", async () => {
+  it("keeps ←→ on the tab strip even from a drilled-into screen, which toggles its own views with 'v'", async () => {
     const profile = makeProfile();
     profile.tools = [
       {
@@ -196,18 +202,22 @@ describe("App", () => {
     ];
 
     const { lastFrame, stdin } = render(createElement(App, { profile }));
-    stdin.write("\x1B[B"); // down arrow: Model -> Tools (default category is Model)
-    await tick();
-    stdin.write("\r"); // categories -> detail focus
+    stdin.write("\u001B[C"); // →: Overview -> Tools
     await tick();
     stdin.write("\r"); // drill into the Bash row
     await tick();
-    expect(lastFrame()).toContain("By command"); // now inside ToolDetailScreen, on it by default
+    expect(lastFrame()).toContain("By command"); // inside ToolDetailScreen
 
-    stdin.write("[C"); // →: must toggle ToolDetailScreen's view (to Calls), not cycle tabs
+    stdin.write("v"); // the screen's own view toggle, twice: By recipe -> By command -> Calls
     await tick();
-    expect(lastFrame()).toContain("[1/3]"); // still on the Overview tab
-    expect(lastFrame()).toContain("Overview");
+    stdin.write("v");
+    await tick();
     expect(lastFrame()).toContain("pnpm test"); // switched to the Calls view
+    expect(lastFrame()).toContain("[2/4]"); // and still on the Tools tab
+
+    stdin.write("\u001B[C"); // →: the arrows still belong to the tab strip, drilled in or not
+    await tick();
+    expect(lastFrame()).toContain("[3/4]");
+    expect(lastFrame()).toContain("Timeline");
   });
 });

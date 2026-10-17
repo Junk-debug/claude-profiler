@@ -29,3 +29,6 @@ jobs:
 
   binaries:
     uses: ./.github/workflows/binaries.yml
+
+  macos-app:
+    uses: ./.github/workflows/macos-app.yml

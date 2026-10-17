@@ -1,13 +1,23 @@
 import { Box, Text, useInput } from "ink";
 import { useState } from "react";
 import type { ModelBreakdown, ModelRequest, ModelRollup } from "../metrics/model-breakdown.js";
+import { ModelBreakdownTable } from "./CategoryBreakdown.js";
 import type { NavScreen, NavStack, ScreenProps } from "./shell.js";
-import { formatCount, formatDateTime, formatMs, formatPercent, truncate } from "./format.js";
+import {
+  formatClock,
+  formatCount,
+  formatDateTime,
+  formatModel,
+  formatMs,
+  formatPercent,
+  formatRate,
+  truncate,
+} from "./format.js";
 
 const VISIBLE_ROWS = 15;
 
 const INDEX_WIDTH = 6;
-const WHEN_WIDTH = 17;
+const WHEN_WIDTH = 10;
 const TOTAL_WIDTH = 9;
 const FIRST_WIDTH = 9;
 const OUT_WIDTH = 7;
@@ -48,10 +58,11 @@ export function sortRequests(requests: ModelRequest[], key: RequestSortKey): Mod
   }
 }
 
+/** The same words the rollups use as their key, and the same the menu bar app prints. */
 function causeLabel(request: ModelRequest): string {
   if (request.cause.kind === "tool") return `after ${request.cause.name ?? "a tool"}`;
   if (request.cause.kind === "prompt") return "after your prompt";
-  return "—";
+  return request.cause.name ?? "other";
 }
 
 function suspectLabel(request: ModelRequest): string {
@@ -129,7 +140,7 @@ export function ModelRequestList({ breakdown, nav, sortKey }: ModelRequestListPr
             </Box>
             <Box width={WHEN_WIDTH} marginRight={1} flexShrink={0}>
               <Text color={color} dimColor={!selected && !request.suspect}>
-                {formatDateTime(request.at)}
+                {formatClock(request.at)}
               </Text>
             </Box>
             <Box width={TOTAL_WIDTH} flexShrink={0}>
@@ -149,7 +160,7 @@ export function ModelRequestList({ breakdown, nav, sortKey }: ModelRequestListPr
             </Box>
             <Box width={RATE_WIDTH} flexShrink={0}>
               <Text color={color} dimColor={!selected && !request.suspect}>
-                {request.tokensPerSec === null ? "—" : request.tokensPerSec.toFixed(1)}
+                {formatRate(request.tokensPerSec)}
               </Text>
             </Box>
             <Box width={CONTEXT_WIDTH} flexShrink={0}>
@@ -170,25 +181,11 @@ export function ModelRequestList({ breakdown, nav, sortKey }: ModelRequestListPr
   );
 }
 
-/**
- * Plain words for the coefficient, so the number is readable without
- * recalling what r means. Deliberately blunt at the low end: "no relationship
- * worth acting on" is the answer most sessions get, and burying it behind a
- * bare 0.13 invites reading a trend into noise.
- */
-function describeCorrelation(r: number): string {
-  const strength = Math.abs(r);
-  if (strength < 0.3) return "— no relationship worth acting on";
-  if (strength < 0.6) return r > 0 ? "— a weak pull upwards" : "— a weak pull downwards";
-  return r > 0 ? "— bigger prompts really are slower here" : "— bigger prompts are oddly faster here";
-}
-
 const ROLLUP_KEY_WIDTH = 34;
 
-function RollupTable({ title, rows }: { title: string; rows: ModelRollup[] }): React.JSX.Element {
+function RollupTable({ rows }: { rows: ModelRollup[] }): React.JSX.Element {
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold>{title}</Text>
+    <Box flexDirection="column">
       {rows.length === 0 ? (
         <Text dimColor>  nothing recorded</Text>
       ) : (
@@ -214,52 +211,81 @@ function RollupTable({ title, rows }: { title: string; rows: ModelRollup[] }): R
 }
 
 /**
+ * The five lenses on the Model bucket, in the order both UIs show them: what
+ * the model produced, then the same total grouped three ways, then the
+ * requests themselves. Each one is a view of the same bucket, so no two of
+ * them can disagree with the headline number.
+ */
+export const MODEL_VIEWS = ["type", "cause", "model", "effort", "requests"] as const;
+export type ModelView = (typeof MODEL_VIEWS)[number];
+
+const VIEW_LABELS: Record<ModelView, string> = {
+  type: "By type",
+  cause: "By cause",
+  model: "By model",
+  effort: "By effort",
+  requests: "Requests",
+};
+
+/** The three views that are a rollup of `totalMs` rather than a table of their own. */
+export type RollupView = Extract<ModelView, "cause" | "model" | "effort">;
+
+/**
+ * The note each rollup leads with. It says what the grouping is in full —
+ * "by what handed control back to the model", not the strip's clipped "By
+ * cause" — so the view carries its own explanation and the strip stays short.
+ */
+const ROLLUP_NOTES: Record<RollupView, string> = {
+  cause: "by what handed control back to the model",
+  model: "by which model answered",
+  effort: "by the thinking effort it was asked for",
+};
+
+function rollupRows(breakdown: ModelBreakdown, view: RollupView): ModelRollup[] {
+  if (view === "model") return breakdown.byModel;
+  if (view === "effort") return breakdown.byEffort;
+  return breakdown.byCause;
+}
+
+/**
  * The same model time grouped by what caused it rather than by what it was
  * spent on: which tool's result the model had just been handed, which model
  * answered, and at what effort. "Model time after Bash results" is a number
  * you can act on in a way that "thinking: 58%" is not.
  */
-export function ModelRollups({ breakdown }: { breakdown: ModelBreakdown }): React.JSX.Element {
-  const { contextLatency } = breakdown;
+export function ModelRollups({
+  breakdown,
+  view,
+}: {
+  breakdown: ModelBreakdown;
+  view: RollupView;
+}): React.JSX.Element {
   return (
     <Box flexDirection="column">
-      <Text dimColor>the same {formatMs(breakdown.totalMs)}, grouped by what caused each request</Text>
+      <Text dimColor>
+        the same {formatMs(breakdown.totalMs)}, {ROLLUP_NOTES[view]}
+      </Text>
       <Box marginTop={1} flexDirection="column">
-        <RollupTable title="By what handed control back" rows={breakdown.byCause} />
-        <RollupTable title="By model" rows={breakdown.byModel} />
-        <RollupTable title="By thinking effort" rows={breakdown.byEffort} />
-      </Box>
-      <Box flexDirection="column">
-        <Text bold>Does a bigger prompt mean a slower first block?</Text>
-        {contextLatency === null ? (
-          <Text dimColor>{"  "}too few comparable requests in this session to say</Text>
-        ) : (
-          <Text>
-            {"  "}r = {contextLatency.correlation.toFixed(2)} over {contextLatency.requests} request
-            {contextLatency.requests === 1 ? "" : "s"}{" "}
-            <Text dimColor>{describeCorrelation(contextLatency.correlation)}</Text>
-          </Text>
-        )}
+        <RollupTable rows={rollupRows(breakdown, view)} />
       </Box>
     </Box>
   );
 }
-
-const VIEW_REQUESTS = 0;
-const VIEW_ROLLUPS = 1;
 
 export interface ModelRequestsScreenProps extends ScreenProps {
   breakdown: ModelBreakdown;
 }
 
 /**
- * The Model category's own drill-down screen, reached with `⏎` from the
- * Overview's breakdown table. `←→` switches between the request list and the
- * rollups; both are views of the same total, so neither can disagree with
- * the headline bucket.
+ * The Model tab, as five views of one bucket switched with `v` (or `1`-`5`):
+ * the token split the Overview shows, the three rollups, and the request
+ * list. The menu bar app switches the same five with a segmented picker.
+ *
+ * `←→` is deliberately not used here — the arrows always belong to the tab
+ * strip (App.tsx), at every depth.
  */
-export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps): React.JSX.Element {
-  const view = nav.view;
+export function ModelRequestsScreen({ profile, breakdown, nav }: ModelRequestsScreenProps): React.JSX.Element {
+  const view = MODEL_VIEWS[nav.view] ?? MODEL_VIEWS[0];
   // The nav frame carries `selection` and `view`; a third slot for the sort
   // choice does not exist, so this is local state and resets when a request
   // detail is pushed and popped. Same trade-off Overview.tsx already makes
@@ -270,16 +296,20 @@ export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps
   const rows = sortRequests(breakdown.requests, sortKey);
 
   useInput((input, key) => {
-    if (key.leftArrow && view !== VIEW_REQUESTS) {
-      nav.setView(VIEW_REQUESTS);
+    if (input === "v") {
+      nav.setView((nav.view + 1) % MODEL_VIEWS.length);
       nav.setSelection(0);
       return;
     }
-    if (key.rightArrow && view !== VIEW_ROLLUPS) {
-      nav.setView(VIEW_ROLLUPS);
+    // A cycle key alone is tedious across five views, so each one also has
+    // its own digit — the same order the picker shows, left to right.
+    const digit = Number.parseInt(input, 10);
+    if (Number.isInteger(digit) && digit >= 1 && digit <= MODEL_VIEWS.length) {
+      nav.setView(digit - 1);
+      nav.setSelection(0);
       return;
     }
-    if (view !== VIEW_REQUESTS || rows.length === 0) return;
+    if (view !== "requests" || rows.length === 0) return;
 
     if (key.upArrow) {
       nav.setSelection((nav.selection - 1 + rows.length) % rows.length);
@@ -305,24 +335,29 @@ export function ModelRequestsScreen({ breakdown, nav }: ModelRequestsScreenProps
       </Text>
       <Box marginTop={1}>
         <Text>
-          <Text {...(view === VIEW_REQUESTS ? { color: "cyan", bold: true } : { dimColor: true })}>[Requests]</Text>
-          {"  "}
-          <Text {...(view === VIEW_ROLLUPS ? { color: "cyan", bold: true } : { dimColor: true })}>[By cause]</Text>
-          <Text dimColor> ←→ switch view</Text>
+          {MODEL_VIEWS.map((id, i) => (
+            <Text key={id}>
+              {i === 0 ? "" : "  "}
+              <Text {...(view === id ? { color: "cyan", bold: true } : { dimColor: true })}>[{VIEW_LABELS[id]}]</Text>
+            </Text>
+          ))}
+          <Text dimColor>  v switch view</Text>
         </Text>
       </Box>
       <Box marginTop={1}>
-        {view === VIEW_ROLLUPS ? (
-          <ModelRollups breakdown={breakdown} />
-        ) : (
+        {view === "requests" ? (
           <ModelRequestList breakdown={breakdown} nav={nav} sortKey={sortKey} />
+        ) : view === "type" ? (
+          <ModelBreakdownTable breakdown={breakdown} tokens={profile.tokens} selectedIndex={0} active={false} />
+        ) : (
+          <ModelRollups breakdown={breakdown} view={view} />
         )}
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          {view === VIEW_ROLLUPS
-            ? "←→ switch view · Esc back · q quit"
-            : "↑↓ select · ⏎ request detail · s sort · ←→ switch view · Esc back · q quit"}
+          {view === "requests"
+            ? `↑↓ select · ⏎ request detail · s sort · v/1-5 switch view · ←→ tabs${nav.canPop ? " · Esc back" : ""} · q quit`
+            : `v/1-5 switch view · ←→ tabs${nav.canPop ? " · Esc back" : ""} · q quit`}
         </Text>
       </Box>
     </Box>
@@ -391,9 +426,9 @@ export function ModelRequestDetailScreen({
             ? `a ${request.cause.name} result coming back`
             : request.cause.kind === "prompt"
               ? "your prompt"
-              : "—"}
+              : (request.cause.name ?? "other")}
         </Field>
-        <Field label="Model">{request.model ?? "—"}</Field>
+        <Field label="Model">{request.model ? formatModel(request.model) : "—"}</Field>
         <Field label="Effort">{request.effort ?? "—"}</Field>
         <Field label="Stop reason">{request.stopReason ?? "—"}</Field>
       </Box>
@@ -415,7 +450,7 @@ export function ModelRequestDetailScreen({
           <Text dimColor>({formatCount(request.thinkingTokens)} of them thinking)</Text>
         </Field>
         <Field label="Throughput">
-          {request.tokensPerSec === null ? "—" : `${request.tokensPerSec.toFixed(1)} tok/s`}{" "}
+          {request.tokensPerSec === null ? "—" : `${formatRate(request.tokensPerSec)} tok/s`}{" "}
           <Text dimColor>(session median sets a {breakdown.stallThresholdTokensPerSec.toFixed(1)} tok/s floor)</Text>
         </Field>
         <Field label="Context carried">{formatCount(request.contextTokens)} tokens</Field>
@@ -427,7 +462,7 @@ export function ModelRequestDetailScreen({
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>Esc back · q quit</Text>
+        <Text dimColor>←→ tabs · Esc back · q quit</Text>
       </Box>
     </Box>
   );

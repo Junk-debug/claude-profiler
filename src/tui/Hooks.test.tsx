@@ -178,7 +178,7 @@ describe("HooksScreen", () => {
     );
 
     expect(frame).toContain("Cache rewrites");
-    expect(frame).toContain("$0.6749");
+    expect(frame).toContain("$0.67");
     expect(frame).toContain("CC's own estimate");
     expect(frame).toContain("catalog");
     expect(frame).toContain("threw away a warm cache");
