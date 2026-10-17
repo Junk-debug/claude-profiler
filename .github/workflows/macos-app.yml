@@ -143,8 +143,17 @@ jobs:
           if [ "${{ steps.notarize.outputs.notarized }}" = "true" ]; then
             # Gatekeeper's own verdict, which is what a user's Mac asks.
             spctl --assess --type execute --verbose=2 "$app"
+            # The ticket is also checked against Apple's CloudKit, which a runner
+            # sometimes cannot reach; spctl above is the verdict that matters.
             if [ "${{ steps.notarize.outputs.stapled }}" = "true" ]; then
-              xcrun stapler validate "$app"
+              validated=false
+              for attempt in 1 2 3 4; do
+                if xcrun stapler validate "$app"; then validated=true; break; fi
+                sleep 20
+              done
+              if [ "$validated" != true ]; then
+                echo "::warning::stapler validate could not reach Apple; spctl accepted the app"
+              fi
             fi
           fi
           mkdir "$RUNNER_TEMP/home"
