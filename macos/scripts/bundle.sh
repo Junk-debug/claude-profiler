@@ -53,6 +53,8 @@ echo "› assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/ClaudeProfilerBar" "$APP/Contents/MacOS/ClaudeProfilerBar"
 cp "$BUILD_DIR/sea/cprof-live" "$APP/Contents/Resources/cprof-live"
+cp "$MACOS_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp "$MACOS_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -63,6 +65,8 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>CFBundleDisplayName</key><string>Claude Profiler</string>
   <key>CFBundleIdentifier</key><string>io.github.softjey.claude-profiler</string>
   <key>CFBundleExecutable</key><string>ClaudeProfilerBar</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>

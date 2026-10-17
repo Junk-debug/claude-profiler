@@ -1,6 +1,7 @@
 name: macOS app
 
-# Builds "Claude Profiler.app" (macos/scripts/bundle.sh) and zips it, once per
+# Builds "Claude Profiler.app" (macos/scripts/bundle.sh), packs it into a disk
+# image (macos/scripts/make-dmg.sh), once per
 # Mac architecture, as the `app-*` artifacts. Called by CI, to catch an app that
 # no longer builds, and by Publish and Release app, to attach it to a release.
 #
@@ -40,7 +41,7 @@ jobs:
           - { runner: macos-15-intel, target: x64 }
     runs-on: ${{ matrix.runner }}
     env:
-      ZIP: Claude-Profiler-App-macos-${{ matrix.target }}.zip
+      DMG: Claude-Profiler-App-macos-${{ matrix.target }}.dmg
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,20 +127,58 @@ jobs:
             echo "::warning::could not staple the notarization ticket; the app is notarized but opens only online"
           fi
 
-      - name: Zip the app
-        run: |
-          cd macos/build
-          # ditto, not zip: it keeps the bundle's symlinks and signature intact.
-          ditto -c -k --keepParent "Claude Profiler.app" "$ZIP"
+      # The disk image is what a user downloads: signed, and notarized and
+      # stapled in its own right, so it opens with no warning and the app dragged
+      # out of it is the notarized one inside.
+      - name: Build the disk image
+        run: macos/scripts/make-dmg.sh "macos/build/Claude Profiler.app" "macos/build/$DMG"
 
-      # What a user gets: the zip, unpacked, still verifies, and its collector
-      # starts and answers on an empty home directory.
-      - name: Smoke test the zip
+      - name: Notarize the disk image
+        id: notarize-dmg
+        if: inputs.sign && steps.notarize.outputs.notarized == 'true'
+        env:
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
+          printf '%s' "$API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool submit "macos/build/$DMG" \
+            --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" --wait
+          rm "$RUNNER_TEMP/AuthKey.p8"
+          echo "notarized=true" >> "$GITHUB_OUTPUT"
+          # Retried for the same reason as the app's: CloudKit is not always reachable.
+          for attempt in 1 2 3 4 5 6; do
+            if xcrun stapler staple "macos/build/$DMG"; then
+              echo "stapled=true" >> "$GITHUB_OUTPUT"
+              break
+            fi
+            echo "stapling failed (attempt $attempt of 6), retrying"
+            sleep 30
+          done
+          if [ "$(grep -c '^stapled=true' "$GITHUB_OUTPUT")" = 0 ]; then
+            echo "::warning::could not staple the disk image; it is notarized but opens only online"
+          fi
+
+      # What a user gets: the image, opened, holds an app that still verifies and
+      # whose collector starts and answers on an empty home directory.
+      - name: Smoke test the disk image
+        run: |
+          dmg="macos/build/$DMG"
+          if [ "${{ steps.notarize-dmg.outputs.notarized }}" = "true" ]; then
+            # Gatekeeper's verdict on the image itself, as a download would be assessed.
+            spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          fi
+          mount="$RUNNER_TEMP/mount"
+          mkdir "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          trap 'hdiutil detach "$mount" -quiet || true' EXIT
+          test -L "$mount/Applications"
+          # Drag-install: copy the app out, as a user's Mac would.
           rm -rf "$RUNNER_TEMP/app" && mkdir "$RUNNER_TEMP/app"
-          ditto -x -k "macos/build/$ZIP" "$RUNNER_TEMP/app"
+          ditto "$mount/Claude Profiler.app" "$RUNNER_TEMP/app/Claude Profiler.app"
           app="$RUNNER_TEMP/app/Claude Profiler.app"
           codesign --verify --deep --strict "$app"
+          test -f "$app/Contents/Resources/AppIcon.icns"
           if [ "${{ steps.notarize.outputs.notarized }}" = "true" ]; then
             # Gatekeeper's own verdict, which is what a user's Mac asks.
             spctl --assess --type execute --verbose=2 "$app"
@@ -163,5 +202,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.target }}
-          path: macos/build/${{ env.ZIP }}
+          path: macos/build/${{ env.DMG }}
           if-no-files-found: error
