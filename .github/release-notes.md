@@ -2,7 +2,7 @@
 
 | I want | Download |
 | --- | --- |
-| **The menu bar app** for a Mac | `Claude-Profiler-App-macos-arm64.zip` (Apple Silicon) or `Claude-Profiler-App-macos-x64.zip` (Intel) |
+| **The menu bar app** for a Mac | `Claude-Profiler-App-macos-arm64.dmg` (Apple Silicon) or `Claude-Profiler-App-macos-x64.dmg` (Intel) |
 | **The terminal program** (CLI) | `claude-profiler-cli-macos-*`, `claude-profiler-cli-linux-*` or `claude-profiler-cli-windows-*`, for `arm64` or `x64` |
 | To check a download | `checksums-app.txt` for the app, `checksums.txt` for the terminal program |
 
