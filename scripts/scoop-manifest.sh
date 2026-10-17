@@ -4,7 +4,7 @@
 #
 #   scripts/scoop-manifest.sh 0.2.0 checksums.txt > bucket/claude-profiler.json
 #
-# `checksums.txt` is the release's: "<sha256>  claude-profiler-<os>-<arch>.<ext>"
+# `checksums.txt` is the release's: "<sha256>  claude-profiler-cli-<os>-<arch>.<ext>"
 # per line, as `sha256sum` writes it.
 set -euo pipefail
 
@@ -14,9 +14,9 @@ base="https://github.com/Softjey/claude-profiler/releases/download/v$version"
 
 sha() {
   local sum
-  sum="$(awk -v f="claude-profiler-$1.zip" '$2 == f || $2 == "*" f { print $1 }' "$checksums")"
+  sum="$(awk -v f="claude-profiler-cli-$1.zip" '$2 == f || $2 == "*" f { print $1 }' "$checksums")"
   if [[ -z "$sum" ]]; then
-    echo "error: claude-profiler-$1.zip is not in $checksums" >&2
+    echo "error: claude-profiler-cli-$1.zip is not in $checksums" >&2
     exit 1
   fi
   echo "$sum"
@@ -35,11 +35,11 @@ cat <<EOF
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "$base/claude-profiler-windows-x64.zip",
+      "url": "$base/claude-profiler-cli-windows-x64.zip",
       "hash": "$windows_x64"
     },
     "arm64": {
-      "url": "$base/claude-profiler-windows-arm64.zip",
+      "url": "$base/claude-profiler-cli-windows-arm64.zip",
       "hash": "$windows_arm64"
     }
   },

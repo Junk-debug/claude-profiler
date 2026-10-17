@@ -75,7 +75,11 @@ jobs:
         run: |
           flags=()
           [[ "$GITHUB_REF_NAME" == *-* ]] && flags+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${flags[@]}"
+          # A guide to the files first, then GitHub's own changelog under it.
+          { cat .github/release-notes.md
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$GITHUB_REF_NAME" --jq .body
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
         shell: bash
 
   binaries:
@@ -100,9 +104,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd binaries
-          sha256sum claude-profiler-*.tar.gz claude-profiler-*.zip > checksums.txt
+          sha256sum claude-profiler-cli-*.tar.gz claude-profiler-cli-*.zip > checksums.txt
           cat checksums.txt
-          gh release upload "$GITHUB_REF_NAME" claude-profiler-*.tar.gz claude-profiler-*.zip checksums.txt --clobber
+          gh release upload "$GITHUB_REF_NAME" claude-profiler-cli-*.tar.gz claude-profiler-cli-*.zip checksums.txt --clobber
 
       # Pushing to other repositories needs a token of its own: a fine-grained
       # PAT with Contents read/write on Softjey/homebrew-tap and
@@ -157,7 +161,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd app
-          sha256sum Claude-Profiler-macos-*.zip > checksums-app.txt
+          sha256sum Claude-Profiler-App-macos-*.zip > checksums-app.txt
           cat checksums-app.txt
-          gh release upload "$GITHUB_REF_NAME" Claude-Profiler-macos-*.zip checksums-app.txt --clobber \
+          gh release upload "$GITHUB_REF_NAME" Claude-Profiler-App-macos-*.zip checksums-app.txt --clobber \
             --repo "$GITHUB_REPOSITORY"

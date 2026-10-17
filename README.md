@@ -26,8 +26,8 @@ and the short `cprof`.
 | macOS or Linux | install script | `curl -fsSL https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.sh \| sh` |
 | Windows, Scoop | Scoop | `scoop bucket add softjey https://github.com/Softjey/scoop-bucket` then `scoop install claude-profiler` |
 | Windows | install script | `irm https://raw.githubusercontent.com/Softjey/claude-profiler/master/install.ps1 \| iex` |
-| Anything else | download by hand | an archive from the [releases](https://github.com/Softjey/claude-profiler/releases) page |
-| A Mac, and you want it in the menu bar | the app | `Claude-Profiler-macos-*.zip` from the [latest release](https://github.com/Softjey/claude-profiler/releases/latest); see [Menu bar app](#menu-bar-app-macos) |
+| Anything else | download by hand | a `claude-profiler-cli-*` archive from the [releases](https://github.com/Softjey/claude-profiler/releases) page |
+| A Mac, and you want it in the menu bar | the app | `Claude-Profiler-App-macos-*.zip` from the [latest release](https://github.com/Softjey/claude-profiler/releases/latest); see [Menu bar app](#menu-bar-app-macos) |
 
 The `npx` and `npm` methods need Node.js 22 or newer. The rest are the **standalone build**:
 one executable that carries its own Node, so nothing else has to be installed. It exists
@@ -218,8 +218,8 @@ the same files, so one collector covers all three.
 
 ### Install
 
-Download `Claude-Profiler-macos-arm64.zip` (Apple Silicon) or
-`Claude-Profiler-macos-x64.zip` (Intel) from the
+Download `Claude-Profiler-App-macos-arm64.zip` (Apple Silicon) or
+`Claude-Profiler-App-macos-x64.zip` (Intel) from the
 [latest release](https://github.com/Softjey/claude-profiler/releases/latest), unzip it and
 drag **Claude Profiler** to Applications, then open it. macOS 14 or later; it needs no Node.
 Not sure which Mac you have? Apple menu → **About This Mac**: "Chip: Apple M…" is arm64.
