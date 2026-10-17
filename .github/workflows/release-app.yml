@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd app
-          sha256sum Claude-Profiler-macos-*.zip > checksums-app.txt
+          sha256sum Claude-Profiler-App-macos-*.zip > checksums-app.txt
           cat checksums-app.txt
-          gh release upload "${{ inputs.tag }}" Claude-Profiler-macos-*.zip checksums-app.txt --clobber \
+          gh release upload "${{ inputs.tag }}" Claude-Profiler-App-macos-*.zip checksums-app.txt --clobber \
             --repo "$GITHUB_REPOSITORY"

@@ -3,7 +3,7 @@
 # executable, so the machine it runs on needs no Node at all.
 #
 #   scripts/build-binary.sh   → build/binary/claude-profiler[.exe]
-#                               build/binary/claude-profiler-<os>-<arch>.tar.gz (.zip on Windows)
+#                               build/binary/claude-profiler-cli-<os>-<arch>.tar.gz (.zip on Windows)
 #
 # Builds for the platform it runs on (`node --build-sea` embeds the running
 # node), so the release workflow runs it once per platform. Needs Node >= 25.5
@@ -32,7 +32,7 @@ fi
 # Named after the node being embedded, not `uname`: Git Bash on an arm64
 # Windows machine can itself be an emulated x64 program.
 case "$(node -p process.platform)" in
-  darwin) os=darwin ;;
+  darwin) os=macos ;;
   linux) os=linux ;;
   win32) os=windows ;;
   *) echo "error: unsupported platform $(node -p process.platform)" >&2; exit 1 ;;
@@ -70,7 +70,7 @@ EOF
 echo "› building the executable"
 node --build-sea "$(native "$WORK_DIR/sea-config.json")" >/dev/null
 
-if [[ "$os" == darwin ]]; then
+if [[ "$os" == macos ]]; then
   echo "› signing (ad hoc)"
   # Injecting the bundle invalidates node's signature, and arm64 macOS kills
   # an executable whose signature does not verify.
@@ -95,11 +95,11 @@ fi
 rm -rf "$home"
 
 if [[ "$os" == windows ]]; then
-  archive="claude-profiler-$os-$arch.zip"
+  archive="claude-profiler-cli-$os-$arch.zip"
   powershell.exe -NoProfile -NonInteractive -Command \
     "Compress-Archive -Path '$(native "$BUILD_DIR/$exe")' -DestinationPath '$(native "$BUILD_DIR/$archive")' -Force"
 else
-  archive="claude-profiler-$os-$arch.tar.gz"
+  archive="claude-profiler-cli-$os-$arch.tar.gz"
   tar -czf "$BUILD_DIR/$archive" -C "$BUILD_DIR" "$exe"
 fi
 rm -rf "$WORK_DIR"

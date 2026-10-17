@@ -8,7 +8,7 @@
 # real one: `claude-profiler-canary` becomes `class ClaudeProfilerCanary`, which
 # conflicts with `claude-profiler` since both install the same binary.
 #
-# `checksums.txt` is the release's: "<sha256>  claude-profiler-<os>-<arch>.tar.gz"
+# `checksums.txt` is the release's: "<sha256>  claude-profiler-cli-<os>-<arch>.tar.gz"
 # per line, as `shasum -a 256` writes it.
 set -euo pipefail
 
@@ -25,9 +25,9 @@ fi
 
 sha() {
   local sum
-  sum="$(awk -v f="claude-profiler-$1.tar.gz" '$2 == f || $2 == "*" f { print $1 }' "$checksums")"
+  sum="$(awk -v f="claude-profiler-cli-$1.tar.gz" '$2 == f || $2 == "*" f { print $1 }' "$checksums")"
   if [[ -z "$sum" ]]; then
-    echo "error: claude-profiler-$1.tar.gz is not in $checksums" >&2
+    echo "error: claude-profiler-cli-$1.tar.gz is not in $checksums" >&2
     exit 1
   fi
   echo "$sum"
@@ -35,8 +35,8 @@ sha() {
 
 # Looked up before the heredoc: a failure inside its $(...) would not stop the
 # script, and a formula with an empty sha256 would go out.
-darwin_arm64="$(sha darwin-arm64)"
-darwin_x64="$(sha darwin-x64)"
+macos_arm64="$(sha macos-arm64)"
+macos_x64="$(sha macos-x64)"
 linux_arm64="$(sha linux-arm64)"
 linux_x64="$(sha linux-x64)"
 
@@ -50,22 +50,22 @@ class $class_name < Formula
 
   on_macos do
     on_arm do
-      url "$base/claude-profiler-darwin-arm64.tar.gz"
-      sha256 "$darwin_arm64"
+      url "$base/claude-profiler-cli-macos-arm64.tar.gz"
+      sha256 "$macos_arm64"
     end
     on_intel do
-      url "$base/claude-profiler-darwin-x64.tar.gz"
-      sha256 "$darwin_x64"
+      url "$base/claude-profiler-cli-macos-x64.tar.gz"
+      sha256 "$macos_x64"
     end
   end
 
   on_linux do
     on_arm do
-      url "$base/claude-profiler-linux-arm64.tar.gz"
+      url "$base/claude-profiler-cli-linux-arm64.tar.gz"
       sha256 "$linux_arm64"
     end
     on_intel do
-      url "$base/claude-profiler-linux-x64.tar.gz"
+      url "$base/claude-profiler-cli-linux-x64.tar.gz"
       sha256 "$linux_x64"
     end
   end

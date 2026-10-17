@@ -32,20 +32,30 @@ $base = if ($env:CPROF_DOWNLOAD_BASE) {
 } else {
   "https://github.com/$repo/releases/latest/download"
 }
-$archive = "claude-profiler-windows-$arch.zip"
+$archive = "claude-profiler-cli-windows-$arch.zip"
+# Releases before the cli- rename, for a CPROF_VERSION pinned to one of them.
+$legacyArchive = "claude-profiler-windows-$arch.zip"
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
-  Write-Host "Downloading $archive..."
-  Invoke-WebRequest -UseBasicParsing -Uri "$base/$archive" -OutFile (Join-Path $tmp $archive)
   Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt')
 
-  $expected = Get-Content (Join-Path $tmp 'checksums.txt') |
-    # A `*` before the name is sha256sum's binary-mode marker.
-    ForEach-Object { $sum, $name = -split $_; if ($name -and $name.TrimStart('*') -eq $archive) { $sum } } |
-    Select-Object -First 1
-  if (-not $expected) { throw "$archive is not listed in checksums.txt" }
+  function Find-Checksum($file) {
+    Get-Content (Join-Path $tmp 'checksums.txt') |
+      # A `*` before the name is sha256sum's binary-mode marker.
+      ForEach-Object { $sum, $name = -split $_; if ($name -and $name.TrimStart('*') -eq $file) { $sum } } |
+      Select-Object -First 1
+  }
+  $expected = Find-Checksum $archive
+  if (-not $expected) {
+    $archive = $legacyArchive
+    $expected = Find-Checksum $archive
+  }
+  if (-not $expected) { throw "no windows $arch build is listed in checksums.txt" }
+
+  Write-Host "Downloading $archive..."
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/$archive" -OutFile (Join-Path $tmp $archive)
   $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $archive)).Hash
   if ($actual -ne $expected) { throw "checksum mismatch for $archive" }
 

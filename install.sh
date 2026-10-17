@@ -22,8 +22,8 @@ fail() {
 }
 
 case "$(uname -s)" in
-  Darwin) os=darwin ;;
-  Linux) os=linux ;;
+  Darwin) os=macos; legacy_os=darwin ;;
+  Linux) os=linux; legacy_os=linux ;;
   *) fail "no prebuilt binary for $(uname -s); try 'npx claude-profiler' with Node 22+" ;;
 esac
 case "$(uname -m)" in
@@ -39,7 +39,9 @@ elif [ -n "${CPROF_VERSION:-}" ]; then
 else
   base="https://github.com/$repo/releases/latest/download"
 fi
-archive="claude-profiler-$os-$arch.tar.gz"
+archive="claude-profiler-cli-$os-$arch.tar.gz"
+# Releases before the cli- rename, for a CPROF_VERSION pinned to one of them.
+legacy_archive="claude-profiler-$legacy_os-$arch.tar.gz"
 
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
@@ -52,13 +54,19 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-echo "Downloading $archive..."
-fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
 fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
 
 # A `*` before the name is sha256sum's binary-mode marker.
-expected="$(awk -v f="$archive" '$2 == f || $2 == "*" f { print $1 }' "$tmp/checksums.txt")"
-[ -n "$expected" ] || fail "$archive is not listed in checksums.txt"
+lookup() { awk -v f="$1" '$2 == f || $2 == "*" f { print $1 }' "$tmp/checksums.txt"; }
+expected="$(lookup "$archive")"
+if [ -z "$expected" ]; then
+  archive="$legacy_archive"
+  expected="$(lookup "$archive")"
+fi
+[ -n "$expected" ] || fail "no $os $arch build is listed in checksums.txt"
+
+echo "Downloading $archive..."
+fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
 if command -v sha256sum >/dev/null 2>&1; then
   actual="$(sha256sum "$tmp/$archive" | awk '{ print $1 }')"
 else
