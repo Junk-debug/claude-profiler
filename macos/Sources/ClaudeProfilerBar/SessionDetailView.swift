@@ -91,6 +91,8 @@ struct SessionDetailView: View {
                 .buttonStyle(.borderless)
                 .help("Rebuild the profile now")
                 if let live {
+                    Button(live.state.isLive ? "Go to Chat" : "Resume Chat", systemImage: "arrow.up.forward.app") { Actions.goToChat(live) }
+                        .buttonStyle(.borderless)
                     Button("Open in Profiler", systemImage: "terminal") { Actions.openInProfiler(live) }
                         .buttonStyle(.borderless)
                     Button("Reveal", systemImage: "doc.text.magnifyingglass") { Actions.revealTranscript(live) }

@@ -73,6 +73,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Go to Chat selects the session's tab in Terminal or iTerm2.</string>
 </dict>
 </plist>
 EOF
@@ -83,7 +84,8 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   # Hardened runtime and a secure timestamp are what notarization requires.
   codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" \
     --entitlements "$MACOS_DIR/scripts/collector.entitlements" "$APP/Contents/Resources/cprof-live"
-  codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$APP"
+  codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" \
+    --entitlements "$MACOS_DIR/scripts/app.entitlements" "$APP"
 else
   echo "› signing (ad hoc)"
   codesign --force --sign - "$APP/Contents/Resources/cprof-live"

@@ -189,3 +189,37 @@ private let snapshotLine = #"""
     #expect(start <= Date())
     #expect(Date().timeIntervalSince(start) < 3_600)
 }
+
+@Test func locatesAChatByItsFrontEndAndHostApp() {
+    let code = ChatLocation.Host(pid: 10, bundleId: "com.microsoft.VSCode", bundlePath: "/Applications/Visual Studio Code.app")
+    let terminal = ChatLocation.Host(pid: 20, bundleId: "com.apple.Terminal", bundlePath: "/System/Applications/Utilities/Terminal.app")
+    let ghostty = ChatLocation.Host(pid: 30, bundleId: "com.mitchellh.ghostty", bundlePath: "/Applications/Ghostty.app")
+
+    #expect(ChatLocation.resolve(source: .desktop, sessionId: "s", cwd: "/p", host: nil, tty: nil) == .desktop(sessionId: "s"))
+    #expect(ChatLocation.resolve(source: .vscode, sessionId: "s", cwd: "/p", host: code, tty: nil)
+        == .editor(appPath: code.bundlePath, scheme: "vscode", folder: "/p", sessionId: "s"))
+    // A CLI session in the editor's own terminal goes to the editor window.
+    #expect(ChatLocation.resolve(source: .cli, sessionId: "s", cwd: "/p", host: code, tty: "/dev/ttys001")
+        == .editor(appPath: code.bundlePath, scheme: "vscode", folder: "/p", sessionId: "s"))
+    #expect(ChatLocation.resolve(source: .cli, sessionId: "s", cwd: "/p", host: terminal, tty: "/dev/ttys001")
+        == .terminalTab(bundleId: "com.apple.Terminal", tty: "/dev/ttys001"))
+    #expect(ChatLocation.resolve(source: .cli, sessionId: "s", cwd: "/p", host: ghostty, tty: "/dev/ttys001") == .app(pid: 30))
+    #expect(ChatLocation.resolve(source: .cli, sessionId: "s", cwd: "/p", host: nil, tty: nil)
+        == .resumeInTerminal(sessionId: "s", cwd: "/p"))
+    #expect(ChatLocation.resolve(source: .sdk, sessionId: "s", cwd: nil, host: nil, tty: nil) == nil)
+}
+
+@Test func buildsTheDeepLinks() {
+    #expect(ChatLocation.editorURL(scheme: "cursor", sessionId: "abc")?.absoluteString == "cursor://anthropic.claude-code/open?session=abc")
+    #expect(ChatLocation.desktopURL(sessionId: "abc")?.absoluteString == "claude://code/continue?session=abc")
+    #expect(ChatLocation.selectTabScript(bundleId: "com.apple.Terminal", tty: "/dev/ttys001")?.contains(#"tty of t is "/dev/ttys001""#) == true)
+    #expect(ChatLocation.selectTabScript(bundleId: "com.mitchellh.ghostty", tty: "/dev/ttys001") == nil)
+}
+
+@Test func walksTheProcessTree() {
+    let me = getpid()
+    let chain = ChatLocation.ancestry(of: me)
+    #expect(chain.first == me)
+    #expect(chain.count >= 2)
+    #expect(ChatLocation.parent(of: me) == getppid())
+}

@@ -116,10 +116,12 @@ struct PopoverView: View {
         SessionRow(
             session: session,
             now: now,
-            release: session.state.isLive && session.pid != nil ? { store.release(session) } : nil
+            release: session.state.isLive && session.pid != nil ? { store.release(session) } : nil,
+            goToChat: session.state.isLive ? { Actions.goToChat(session) } : nil
         )
             .onTapGesture { store.openSessionWindow(id: session.id) }
             .contextMenu {
+                Button(session.state.isLive ? "Go to Chat" : "Resume Chat") { Actions.goToChat(session) }
                 Button("Open in Profiler") { Actions.openInProfiler(session) }
                 Button("Reveal Transcript") { Actions.revealTranscript(session) }
                     .disabled(session.transcriptPath == nil)

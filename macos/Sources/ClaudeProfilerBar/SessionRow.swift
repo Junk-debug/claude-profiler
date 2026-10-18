@@ -7,6 +7,8 @@ struct SessionRow: View {
     let now: Date
     /// Set for a live session with a known pid: quits its process.
     var release: (() -> Void)?
+    /// Brings the chat forward in the editor, terminal or desktop app.
+    var goToChat: (() -> Void)?
     @State private var hovering = false
 
     var body: some View {
@@ -39,9 +41,11 @@ struct SessionRow: View {
                 if session.state.isLive {
                     HStack(spacing: 8) {
                         Sparkline(values: session.burn, color: session.state == .idle ? .accentColor : session.state.color)
-                            .frame(width: 90, height: 16)
+                            // Narrower when the row also carries the action buttons.
+                            .frame(width: goToChat == nil ? 90 : 56, height: 16)
                         if let activity = session.activity {
                             ActivityText(activity: activity)
+                                .lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         if let cpu = session.cpuPct, let rss = session.rssMb {
@@ -51,6 +55,11 @@ struct SessionRow: View {
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .fixedSize()
+                        }
+                        if let goToChat {
+                            Button(action: goToChat) { Text("Go to Chat").fixedSize() }
+                                .buttonStyle(DefaultPushButtonStyle(prominent: false))
+                                .help("Switch to this chat in VS Code, the terminal or the Claude app")
                         }
                         if let release {
                             Button(action: release) {
@@ -92,32 +101,43 @@ struct SessionRow: View {
 /// system `.borderedProminent` turns grey in an inactive window, and the menu
 /// bar popover is often not the key window.
 private struct DefaultPushButtonStyle: ButtonStyle {
+    /// Accent-filled like a default button, or the plain secondary kind.
+    var prominent = true
+
     func makeBody(configuration: Configuration) -> some View {
-        PushButton(configuration: configuration)
+        PushButton(configuration: configuration, prominent: prominent)
     }
 
     /// A view of its own, because hover is state and a style has none.
     private struct PushButton: View {
         let configuration: ButtonStyleConfiguration
+        let prominent: Bool
         @State private var hovering = false
+        @Environment(\.colorScheme) private var colorScheme
+
+        private var fill: Color {
+            if prominent { return .accentColor }
+            return colorScheme == .dark ? Color(white: 0.42) : .white
+        }
 
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
             configuration.label
                 .font(.system(size: 11))
-                .foregroundStyle(.white)
+                .foregroundStyle(prominent || colorScheme == .dark ? Color.white : Color.primary)
                 .padding(.horizontal, 9)
                 .frame(height: 19)
                 .background {
-                    shape.fill(Color.accentColor)
+                    shape.fill(fill)
                     shape.fill(LinearGradient(
                         colors: [.white.opacity(hovering ? 0.28 : 0.17), .white.opacity(hovering ? 0.08 : 0)],
                         startPoint: .top,
                         endPoint: .bottom
                     ))
+                    if !prominent, hovering { shape.fill(Color.primary.opacity(0.05)) }
                     if configuration.isPressed { shape.fill(.black.opacity(0.15)) }
                 }
-                .overlay(shape.strokeBorder(.black.opacity(0.12), lineWidth: 0.5))
+                .overlay(shape.strokeBorder(.black.opacity(prominent ? 0.12 : 0.2), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.18), radius: 0.75, y: 0.5)
                 .contentShape(shape)
                 .animation(.easeOut(duration: 0.12), value: hovering)
