@@ -113,13 +113,20 @@ struct PopoverView: View {
     }
 
     private func row(_ session: LiveSession, now: Date) -> some View {
-        SessionRow(session: session, now: now)
+        SessionRow(
+            session: session,
+            now: now,
+            release: session.state.isLive && session.pid != nil ? { store.release(session) } : nil,
+            goToChat: session.state.isLive ? { Actions.goToChat(session) } : nil
+        )
             .onTapGesture { store.openSessionWindow(id: session.id) }
             .contextMenu {
+                Button(session.state.isLive ? "Go to Chat" : "Resume Chat") { Actions.goToChat(session) }
                 Button("Open in Profiler") { Actions.openInProfiler(session) }
                 Button("Reveal Transcript") { Actions.revealTranscript(session) }
                     .disabled(session.transcriptPath == nil)
                 Button("Copy Session ID") { Actions.copy(session.id) }
+                Button("Copy Resume Command") { Actions.copy(SessionRelease.resumeCommand(sessionId: session.id)) }
             }
     }
 

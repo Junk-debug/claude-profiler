@@ -1,0 +1,47 @@
+{
+  "v": 1, "type": "snapshot", "at": 0, "hooksInstalled": true,
+  "today": { "tokens": 4952256, "sessions": 5, "costUsd": 3.96 },
+  "sessions": [
+    {
+      "id": "DEMO_SESSION_ID", "title": "Codebase architecture and bug survey", "cwd": "/Users/alex/code/acme-shop",
+      "source": "vscode", "state": "busy", "pid": 41207, "startedAt": -2700, "lastActivityAt": -2, "model": "claude-sonnet-5-5",
+      "tokens": { "input": 34, "output": 8141, "cacheRead": 639791, "cacheCreate": 49035 }, "tokensToday": 697001,
+      "contextTokens": 49210, "costUsd": null, "subagents": 1, "cpuPct": 14.2, "rssMb": 412,
+      "activity": { "kind": "tool", "tool": "Bash", "since": -4 },
+      "burn": [0, 0, 12000, 48000, 91000, 63000, 22000, 0, 0, 35000, 118000, 142000, 97000, 40000, 8000, 0, 0, 0, 51000, 133000, 160000, 121000, 74000, 30000, 61000, 140000, 155000, 98000, 52000, 88000],
+      "transcriptPath": "/Users/alex/.claude/projects/-Users-alex-code-acme-shop/DEMO_SESSION_ID.jsonl"
+    },
+    {
+      "id": "3b9e6c10-4f2a-4c55-9a1e-6d7f2b8c0e41", "title": "Migrate auth to the OAuth device flow", "cwd": "/Users/alex/code/acme-auth",
+      "source": "cli", "state": "waiting", "pid": 41388, "startedAt": -5400, "lastActivityAt": -40, "model": "claude-sonnet-5-5",
+      "tokens": { "input": 9120, "output": 22870, "cacheRead": 1490233, "cacheCreate": 98310 }, "tokensToday": 1620533,
+      "contextTokens": 104380, "costUsd": null, "subagents": 0, "cpuPct": 0.4, "rssMb": 287,
+      "activity": { "kind": "permission", "tool": "Bash", "since": -38 },
+      "burn": [20000, 34000, 41000, 12000, 0, 0, 0, 26000, 71000, 90000, 66000, 30000, 0, 0, 14000, 52000, 77000, 83000, 40000, 0, 0, 0, 0, 22000, 64000, 70000, 45000, 18000, 9000, 0],
+      "transcriptPath": null
+    },
+    {
+      "id": "8d41f7a2-0c3b-4e9d-a6f5-1b2c3d4e5f60", "title": "Draft the v0.4 release notes", "cwd": "/Users/alex/code/acme-docs",
+      "source": "desktop", "state": "idle", "pid": 41502, "startedAt": -9000, "lastActivityAt": -1260, "model": "claude-opus-5-5",
+      "tokens": { "input": 3210, "output": 9870, "cacheRead": 512330, "cacheCreate": 40112 }, "tokensToday": 565522,
+      "contextTokens": 38214, "costUsd": null, "subagents": 0, "cpuPct": 0.1, "rssMb": 198,
+      "activity": null,
+      "burn": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "transcriptPath": null
+    },
+    {
+      "id": "c2a7e914-55b1-4f0e-8c3d-7a6b5c4d3e21", "title": "Fix the flaky checkout e2e test", "cwd": "/Users/alex/code/acme-shop",
+      "source": "vscode", "state": "ended", "pid": null, "startedAt": -16200, "lastActivityAt": -7400, "model": "claude-sonnet-5-5",
+      "tokens": { "input": 7340, "output": 18220, "cacheRead": 1288410, "cacheCreate": 87120 }, "tokensToday": 1401090,
+      "contextTokens": 91200, "costUsd": 2.71, "subagents": 2, "cpuPct": null, "rssMb": null,
+      "activity": null, "burn": [], "transcriptPath": null
+    },
+    {
+      "id": "f19b3c58-2d7e-4a61-b0c9-3e8f7a6d5c42", "title": "Bump dependencies and fix type errors", "cwd": "/Users/alex/code/acme-web",
+      "source": "cli", "state": "ended", "pid": null, "startedAt": -25200, "lastActivityAt": -19800, "model": "claude-haiku-5-5",
+      "tokens": { "input": 4410, "output": 11030, "cacheRead": 608220, "cacheCreate": 44450 }, "tokensToday": 668110,
+      "contextTokens": 52300, "costUsd": 1.25, "subagents": 0, "cpuPct": null, "rssMb": null,
+      "activity": null, "burn": [], "transcriptPath": null
+    }
+  ]
+}
