@@ -13,6 +13,16 @@ tools, how much was you. It reads the transcripts Claude Code already saves in
 npx claude-profiler "fix flaky login test"
 ```
 
+On a Mac there is also a [menu bar app](#menu-bar-app-macos) that watches every running
+session at once:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/menu-dark.png">
+    <img src="docs/screenshots/menu.png" width="400" alt="The menu bar popover: running sessions with their tokens, CPU, memory, Go to Chat and Free buttons, and today's ended sessions">
+  </picture>
+</p>
+
 ## Install
 
 Pick one. Every method gives you the same program, under both names: `claude-profiler`
@@ -243,6 +253,19 @@ lists each session with its source, state, model, context size, tokens, CPU and 
 plus a tokens-per-minute sparkline and — with hooks installed — the tool running right
 now. Optional notifications fire when Claude finishes a long run or waits for approval.
 
+Each running session has two buttons:
+
+- **Go to Chat** brings that chat forward wherever it lives. The app walks up from the
+  session's process to the app that runs it: in VS Code (or Cursor, Windsurf) it opens the
+  session's tab through the Claude Code extension, in Claude Desktop it opens the Code
+  session, in Terminal or iTerm2 it selects the tab the session writes to (macOS asks once
+  for permission to control it), and any other terminal is brought to the front. On an
+  ended session the same item, in the right-click menu, resumes it instead.
+- **Free *N* MB** quits the session's Claude Code process so macOS gets its memory back.
+  The chat itself stays on disk; right click → **Copy Resume Command** gives
+  `claude --resume <id>` to pick it up later. Before signalling, the app checks that the
+  pid still belongs to that session, so a recycled pid is never touched.
+
 Click a session and you get **everything the terminal UI has**, for that session, kept up
 to date as it runs — the app asks the collector for the same profile artifact the CLI
 builds, so no metric is computed twice. The tabs are [the same seven](#screens), in the
@@ -258,6 +281,28 @@ column header to sort by and a terminal cannot:
 | Context | Context and output per request as charts, with min/max/final and the session totals |
 | Hooks | All eleven sections, the same ones the terminal UI prints |
 | Subagents | Each subagent's own split, tools and calls |
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/detail-overview.png" alt="Overview tab"><br><sub><b>Overview</b> — where the time went</sub></td>
+    <td><img src="docs/screenshots/detail-tools.png" alt="Tools tab"><br><sub><b>Tools</b> — per-tool table</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/detail-model.png" alt="Model tab"><br><sub><b>Model</b> — token split and request views</sub></td>
+    <td><img src="docs/screenshots/detail-timeline.png" alt="Timeline tab"><br><sub><b>Timeline</b> — one row per turn</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/detail-context.png" alt="Context tab"><br><sub><b>Context</b> — context and output per request</sub></td>
+    <td><img src="docs/screenshots/detail-hooks.png" alt="Hooks tab"><br><sub><b>Hooks</b> — approvals, result sizes, parallelism, cache rewrites</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/detail-subagents.png" alt="Subagents tab"><br><sub><b>Subagents</b> — each subagent's own split</sub></td>
+    <td><img src="docs/screenshots/detail-overview-dark.png" alt="Overview tab in dark mode"><br><sub>Dark mode</sub></td>
+  </tr>
+</table>
+
+The screenshots come from a session recorded on a throwaway demo project, with a made-up
+session list around it — none of them show a real session.
 
 **If you can't find the icon**, your menu bar is full: macOS drops the items that do not
 fit, silently, and a newly launched app goes to the back of the queue. The same window is
@@ -362,7 +407,10 @@ swift run --package-path macos ClaudeProfilerBar
 macos/.build/debug/ClaudeProfilerBar --render-png shot.png [--tab tools] [--dark]
 ```
 
-`--render-png` draws the popover, or a detail tab with `--tab`, from real collector data.
+`--render-png` draws the popover, or a detail tab with `--tab`, from real collector data,
+or with `--fixture <dir>` from a saved snapshot and profile instead.
+`macos/scripts/screenshots.sh` renders every README screenshot that way from
+[`macos/fixtures/demo`](macos/fixtures/demo), so none of them show a real session.
 `CPROF_PROFILE_JSON=<a --json artifact> pnpm macos:test` additionally checks that the
 Swift models still decode a profile from one of your own sessions.
 
