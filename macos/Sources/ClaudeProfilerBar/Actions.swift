@@ -31,6 +31,20 @@ enum Actions {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
+    static func reportReleaseFailure(_ failure: SessionRelease.Failure) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        switch failure {
+        case .notThisSession:
+            alert.messageText = "The session has already ended"
+            alert.informativeText = "Its process is gone, or the process id now belongs to another program, so nothing was quit."
+        case .signalFailed(let code):
+            alert.messageText = "Could not quit the session"
+            alert.informativeText = String(cString: strerror(code))
+        }
+        alert.runModal()
+    }
+
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

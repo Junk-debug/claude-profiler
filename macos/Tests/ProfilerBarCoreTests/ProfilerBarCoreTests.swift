@@ -172,3 +172,20 @@ private let snapshotLine = #"""
         #expect(request.totalMs >= 0)
     }
 }
+
+@Test func releaseOnlyMatchesTheSessionThatOwnsThePid() {
+    let registry = Data(#"{"pid":42,"sessionId":"abc","startedAt":1792330904333}"#.utf8)
+    let start = Date(timeIntervalSince1970: 1_792_330_904.1)
+    #expect(SessionRelease.registryMatches(registry, sessionId: "abc", processStart: start))
+    #expect(!SessionRelease.registryMatches(registry, sessionId: "other", processStart: start))
+    // A recycled pid: the process started long after the registry entry.
+    #expect(!SessionRelease.registryMatches(registry, sessionId: "abc", processStart: start.addingTimeInterval(3_600)))
+    #expect(!SessionRelease.registryMatches(Data(#"{"sessionId":"abc"}"#.utf8), sessionId: "abc", processStart: start))
+    #expect(!SessionRelease.registryMatches(Data("not json".utf8), sessionId: "abc", processStart: start))
+}
+
+@Test func readsTheStartTimeOfARunningProcess() throws {
+    let start = try #require(SessionRelease.processStart(pid: getpid()))
+    #expect(start <= Date())
+    #expect(Date().timeIntervalSince(start) < 3_600)
+}

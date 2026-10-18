@@ -96,6 +96,11 @@ struct SessionDetailView: View {
                     Button("Reveal", systemImage: "doc.text.magnifyingglass") { Actions.revealTranscript(live) }
                         .buttonStyle(.borderless)
                         .disabled(live.transcriptPath == nil)
+                    if live.state.isLive, live.pid != nil {
+                        Button("Free Memory", systemImage: "memorychip") { store.release(live) }
+                            .buttonStyle(.borderless)
+                            .help("Quit this session's process; the chat can be resumed later")
+                    }
                 }
             }
             .font(.system(size: 12, weight: .medium))

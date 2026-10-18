@@ -109,6 +109,20 @@ final class LiveStore {
         snapshot?.sessions.first { $0.id == id }
     }
 
+    /// Ends a live session's process, then asks the collector for a snapshot
+    /// right away so the row moves to "Earlier today".
+    func release(_ session: LiveSession) {
+        guard let pid = session.pid, session.state.isLive else { return }
+        let id = session.id
+        Task.detached {
+            let result = SessionRelease.release(pid: Int32(pid), sessionId: id)
+            await MainActor.run {
+                if case .failure(let failure) = result { Actions.reportReleaseFailure(failure) }
+                self.collector?.refresh()
+            }
+        }
+    }
+
     /// Starts following one session's full profile — the same artifact the
     /// terminal UI renders. Refreshed as the session writes more transcript.
     func beginProfile(id: String) {
