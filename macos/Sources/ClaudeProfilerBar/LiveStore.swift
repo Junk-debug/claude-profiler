@@ -27,6 +27,8 @@ final class LiveStore {
     private(set) var profiles: [String: ProfileState] = [:]
     private(set) var status: Status = .starting
     private(set) var lastCollectorError: String?
+    /// How the sessions this app ended were ended, so an ended row can say so.
+    private(set) var releaseHistory = LiveStore.loadReleaseHistory()
 
     @ObservationIgnored private var collector: CollectorProcess?
     @ObservationIgnored private var restartDelay: TimeInterval = 1
@@ -48,6 +50,7 @@ final class LiveStore {
     init(preview: LiveSnapshot, profile: (id: String, value: Profile)? = nil) {
         snapshot = preview
         status = .running
+        releaseHistory = ReleaseHistory()
         if let profile {
             profiles[profile.id] = .loaded(profile.value)
             watchedProfiles[profile.id] = 1
@@ -115,13 +118,14 @@ final class LiveStore {
     /// Ends a live session's process, then asks the collector for a snapshot
     /// right away so the row moves to "Earlier today".
     func release(_ session: LiveSession) {
-        performRelease(session) { result in
+        performRelease(session, trigger: .manual) { result in
             if case .failure(let failure) = result { Actions.reportReleaseFailure(failure) }
         }
     }
 
     private func performRelease(
         _ session: LiveSession,
+        trigger: ReleaseHistory.Record.Trigger,
         onResult: @escaping @MainActor (Result<Void, SessionRelease.Failure>) -> Void
     ) {
         guard let pid = session.pid, session.state.isLive else { return }
@@ -129,6 +133,9 @@ final class LiveStore {
         Task.detached {
             let result = SessionRelease.release(pid: Int32(pid), sessionId: id)
             await MainActor.run {
+                if case .success = result {
+                    self.recordRelease(ReleaseHistory.Record(trigger: trigger, at: Date(), rssMb: session.rssMb), sessionId: id)
+                }
                 onResult(result)
                 self.collector?.refresh()
             }
@@ -145,13 +152,29 @@ final class LiveStore {
             watched: Set(watchedProfiles.keys)
         )
         for session in due {
-            performRelease(session) { [notifier] result in
+            performRelease(session, trigger: .auto) { [notifier] result in
                 switch result {
                 case .success: notifier.notifyReleased(session)
                 case .failure(let failure): Self.log.error("Could not release idle session \(session.id, privacy: .public): \(String(describing: failure), privacy: .public)")
                 }
             }
         }
+    }
+
+    private func recordRelease(_ record: ReleaseHistory.Record, sessionId: String) {
+        var history = releaseHistory.pruned()
+        history.add(record, sessionId: sessionId)
+        releaseHistory = history
+        if let data = try? JSONEncoder().encode(history) {
+            UserDefaults.standard.set(data, forKey: SettingsKey.releaseHistory)
+        }
+    }
+
+    private static func loadReleaseHistory() -> ReleaseHistory {
+        guard let data = UserDefaults.standard.data(forKey: SettingsKey.releaseHistory),
+              let history = try? JSONDecoder().decode(ReleaseHistory.self, from: data)
+        else { return ReleaseHistory() }
+        return history.pruned()
     }
 
     /// Starts following one session's full profile — the same artifact the

@@ -272,7 +272,8 @@ memory you pick. It is off by default. Only idle sessions count, and a minute of
 load in the session's process tree, like a background build, restarts the idle clock.
 Sessions with an open detail window are kept. By default only terminal sessions are freed,
 because an editor or the desktop app shows an error when its process goes away. A
-notification says what was freed.
+notification says what was freed, and an ended session the app quit is marked "freed" or
+"auto-freed" in the list and in its window.
 
 Click a session and you get **everything the terminal UI has**, for that session, kept up
 to date as it runs — the app asks the collector for the same profile artifact the CLI

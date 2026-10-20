@@ -383,3 +383,35 @@ private func feed(
     #expect(releaser.sessionsToRelease(in: resumed, policy: hourPolicy, now: releaseStart.addingTimeInterval(4_000)).isEmpty)
     #expect(releaser.sessionsToRelease(in: resumed, policy: hourPolicy, now: releaseStart.addingTimeInterval(7_600)).count == 1)
 }
+
+@Test func releaseHistoryExplainsAnEndedSessionUntilItIsResumedAndUsed() throws {
+    let releasedAt = Date(timeIntervalSince1970: 1_000_000)
+    var history = ReleaseHistory()
+    history.add(.init(trigger: .auto, at: releasedAt, rssMb: 412), sessionId: "s")
+
+    func ended(lastActivityAt seconds: TimeInterval) throws -> LiveSession {
+        let json = sessionJSON(state: "ended").replacingOccurrences(of: #""lastActivityAt":1"#, with: #""lastActivityAt":\#(seconds * 1_000)"#)
+        return try #require(liveSnapshot([json]).sessions.first)
+    }
+
+    #expect(history.record(for: try ended(lastActivityAt: 996_400))?.trigger == .auto)
+    // What Claude Code writes as it exits is part of the release.
+    #expect(history.record(for: try ended(lastActivityAt: 1_000_030)) != nil)
+    // Resumed and used since: the mark no longer explains how it ended.
+    #expect(history.record(for: try ended(lastActivityAt: 1_003_600)) == nil)
+    // A running session shows its live state, not the old release.
+    #expect(history.record(for: try #require(liveSnapshot([sessionJSON()]).sessions.first)) == nil)
+}
+
+@Test func releaseHistoryKeepsADayAndSurvivesARoundTrip() throws {
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    var history = ReleaseHistory()
+    history.add(.init(trigger: .manual, at: now.addingTimeInterval(-90_000), rssMb: nil), sessionId: "old")
+    history.add(.init(trigger: .manual, at: now.addingTimeInterval(-60), rssMb: 300), sessionId: "s")
+
+    let decoded = try JSONDecoder().decode(ReleaseHistory.self, from: JSONEncoder().encode(history.pruned(now: now)))
+    let ended = try #require(liveSnapshot([sessionJSON(state: "ended")]).sessions.first)
+    let old = try #require(liveSnapshot([sessionJSON(id: "old", state: "ended")]).sessions.first)
+    #expect(decoded.record(for: ended) == .init(trigger: .manual, at: now.addingTimeInterval(-60), rssMb: 300))
+    #expect(decoded.record(for: old) == nil)
+}

@@ -10,6 +10,8 @@ enum SettingsKey {
     static let autoReleaseMinimumRssMb = "autoReleaseMinimumRssMb"
     static let autoReleaseScope = "autoReleaseScope"
     static let notifyAutoRelease = "notifyAutoRelease"
+    /// Not a setting the user sees: `ReleaseHistory`, as JSON.
+    static let releaseHistory = "releaseHistory"
 }
 
 enum AppSettings {
