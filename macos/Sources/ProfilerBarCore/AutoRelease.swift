@@ -26,14 +26,19 @@ public struct AutoRelease: Sendable {
         }
     }
 
-    /// CPU of the session's process tree above which it is not idle after all:
-    /// a background Bash task or a busy MCP server keeps an idle prompt busy.
-    public static let quietCpuPct = 2.0
+    /// CPU of the session's process tree that counts as work. An idle prompt
+    /// still spikes for a sample now and then — MCP servers, Claude Code's own
+    /// timers — so only load that lasts `busyFor` restarts the idle clock: a
+    /// background build or test run keeps the session, a blip does not.
+    public static let busyCpuPct = 10.0
+    public static let busyFor: TimeInterval = 60
 
     /// When this app first saw each process idle and quiet. Its own clock,
     /// not the transcript's: typing a prompt writes nothing to the transcript,
     /// so `lastActivityAt` would call a session idle while someone is typing.
     private var idleSince: [Key: Date] = [:]
+    /// When each idle process last went above `busyCpuPct`, while it stays there.
+    private var loadedSince: [Key: Date] = [:]
     /// Processes already handed out once, so a release that failed is not
     /// retried every snapshot.
     private var attempted: Set<Key> = []
@@ -63,12 +68,21 @@ public struct AutoRelease: Sendable {
         for session in snapshot.sessions {
             guard let pid = session.pid else { continue }
             let key = Key(id: session.id, pid: pid)
-            guard session.state == .idle, let cpu = session.cpuPct, cpu <= Self.quietCpuPct else { continue }
+            guard session.state == .idle, let cpu = session.cpuPct else { continue }
             seen.insert(key)
+            let loaded = cpu > Self.busyCpuPct
+            if loaded {
+                let loadedFrom = loadedSince[key] ?? now
+                loadedSince[key] = loadedFrom
+                if now.timeIntervalSince(loadedFrom) >= Self.busyFor { idleSince[key] = now }
+            } else {
+                loadedSince.removeValue(forKey: key)
+            }
             let since = idleSince[key] ?? now
             idleSince[key] = since
 
             guard let policy,
+                  !loaded,
                   !attempted.contains(key),
                   !excluding.contains(session.id),
                   policy.scope == .all || session.source == .cli,
@@ -79,8 +93,9 @@ public struct AutoRelease: Sendable {
             due.append(session)
         }
 
-        // Anything not idle and quiet right now starts over next time.
+        // Anything not idle right now starts over next time.
         idleSince = idleSince.filter { seen.contains($0.key) }
+        loadedSince = loadedSince.filter { seen.contains($0.key) }
         attempted = attempted.filter { seen.contains($0) }
         return due
     }

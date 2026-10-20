@@ -271,11 +271,27 @@ private let hourPolicy = AutoRelease.Policy(idleAfter: 3_600, minimumMb: 500, sc
     _ = auto.due(in: idle, policy: hourPolicy, now: start)
     _ = auto.due(in: try snapshot([session(state: "busy")]), policy: hourPolicy, now: start.addingTimeInterval(1_800))
     #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(3_600)).isEmpty)
-    // A background task keeps an idle prompt's process tree busy.
-    _ = auto.due(in: try snapshot([session(cpu: 40)]), policy: hourPolicy, now: start.addingTimeInterval(4_000))
+    // A background build keeps an idle prompt's process tree busy for a while.
+    let building = try snapshot([session(cpu: 40)])
+    _ = auto.due(in: building, policy: hourPolicy, now: start.addingTimeInterval(4_000))
+    _ = auto.due(in: building, policy: hourPolicy, now: start.addingTimeInterval(4_060))
     #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(7_000)).isEmpty)
-    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(10_599)).isEmpty)
-    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(10_600)).map(\.id) == ["s"])
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(7_659)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(7_660)).map(\.id) == ["s"])
+}
+
+@Test func autoReleaseShrugsOffAnIdleSessionsCpuSpikes() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let idle = try snapshot([session()])
+    let spike = try snapshot([session(cpu: 30)])
+
+    _ = auto.due(in: idle, policy: hourPolicy, now: start)
+    _ = auto.due(in: spike, policy: hourPolicy, now: start.addingTimeInterval(1_800))
+    _ = auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(1_805))
+    // Not in the middle of a spike, but the spike did not restart the clock.
+    #expect(auto.due(in: spike, policy: hourPolicy, now: start.addingTimeInterval(3_600)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(3_605)).map(\.id) == ["s"])
 }
 
 @Test func autoReleaseCountsIdleTimeEvenWhileOff() throws {

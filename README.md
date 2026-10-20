@@ -269,8 +269,9 @@ Each running session has two buttons:
 Settings → **Memory** can do the same on its own: **Free idle sessions automatically**
 frees a session that has sat idle for 30 minutes to 4 hours and holds at least 200 MB,
 500 MB or 1 GB. It is off by default, and when it is on it is careful about what it
-quits. Only idle sessions count, and only while their process tree is quiet, so one with
-a background task or a busy MCP server still running is kept. Idle time is measured from
+quits. Only idle sessions count, and a minute of sustained CPU load in the session's
+process tree (a background build, a busy MCP server) restarts the idle clock. The short
+spikes an idle session shows now and then do not. Idle time is measured from
 when the app saw the session go idle, because typing a prompt writes nothing to the
 transcript. A session whose detail window is open is kept, and by default only terminal
 sessions are freed, because an editor or the desktop app shows an error when its process
