@@ -267,15 +267,12 @@ Each running session has two buttons:
   pid still belongs to that session, so a recycled pid is never touched.
 
 Settings → **Memory** can do the same on its own: **Free idle sessions automatically**
-frees a session that has sat idle for 30 minutes to 4 hours and holds at least 200 MB,
-500 MB or 1 GB. It is off by default, and when it is on it is careful about what it
-quits. Only idle sessions count, and a minute of sustained CPU load in the session's
-process tree (a background build, a busy MCP server) restarts the idle clock. The short
-spikes an idle session shows now and then do not. Idle time is measured from
-when the app saw the session go idle, because typing a prompt writes nothing to the
-transcript. A session whose detail window is open is kept, and by default only terminal
-sessions are freed, because an editor or the desktop app shows an error when its process
-goes away. A notification says what was freed.
+frees a session once it has sat idle past a threshold you pick and holds at least the
+memory you pick. It is off by default. Only idle sessions count, and a minute of real CPU
+load in the session's process tree, like a background build, restarts the idle clock.
+Sessions with an open detail window are kept. By default only terminal sessions are freed,
+because an editor or the desktop app shows an error when its process goes away. A
+notification says what was freed.
 
 Click a session and you get **everything the terminal UI has**, for that session, kept up
 to date as it runs — the app asks the collector for the same profile artifact the CLI

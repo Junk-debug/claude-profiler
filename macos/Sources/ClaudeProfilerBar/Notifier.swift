@@ -2,21 +2,10 @@ import Foundation
 import ProfilerBarCore
 import UserNotifications
 
-enum SettingsKey {
-    static let notifyFinished = "notifyFinished"
-    static let notifyPermission = "notifyPermission"
-    static let finishedThresholdSeconds = "finishedThresholdSeconds"
-    static let autoFree = "autoFree"
-    static let autoFreeIdleSeconds = "autoFreeIdleSeconds"
-    static let autoFreeMinimumMb = "autoFreeMinimumMb"
-    static let autoFreeScope = "autoFreeScope"
-    static let notifyAutoFree = "notifyAutoFree"
-}
-
 /// Turns state transitions between two snapshots into user notifications:
 /// a long busy stretch that just ended ("Claude finished"), and a session
 /// that started waiting on a permission prompt. Also says when a session
-/// was freed on its own, since nobody clicked anything to expect it.
+/// was released on its own, since nobody clicked anything to expect it.
 @MainActor
 final class Notifier {
     private var busySince: [String: Date] = [:]
@@ -24,19 +13,6 @@ final class Notifier {
 
     /// Notifications need a real bundle; `swift run` has none and would crash.
     private var available: Bool { Bundle.main.bundleIdentifier != nil && Bundle.main.bundlePath.hasSuffix(".app") }
-
-    init() {
-        UserDefaults.standard.register(defaults: [
-            SettingsKey.notifyFinished: true,
-            SettingsKey.notifyPermission: true,
-            SettingsKey.finishedThresholdSeconds: 60.0,
-            SettingsKey.autoFree: false,
-            SettingsKey.autoFreeIdleSeconds: 3_600.0,
-            SettingsKey.autoFreeMinimumMb: 500,
-            SettingsKey.autoFreeScope: AutoRelease.Scope.terminal.rawValue,
-            SettingsKey.notifyAutoFree: true,
-        ])
-    }
 
     func compare(previous: LiveSnapshot?, next: LiveSnapshot) {
         let before = Dictionary(uniqueKeysWithValues: (previous?.sessions ?? []).map { ($0.id, $0) })
@@ -74,13 +50,12 @@ final class Notifier {
         busySince = busySince.filter { alive.contains($0.key) }
     }
 
-    func freed(_ session: LiveSession) {
-        guard UserDefaults.standard.bool(forKey: SettingsKey.notifyAutoFree) else { return }
-        let memory = session.rssMb.map { "\($0) MB" } ?? "memory"
+    func notifyReleased(_ session: LiveSession) {
+        guard UserDefaults.standard.bool(forKey: SettingsKey.notifyAutoRelease) else { return }
         post(
-            title: "Freed \(memory)",
-            body: "\(session.displayTitle) was idle. Continue it with claude --resume.",
-            id: "freed-\(session.id)"
+            title: "Freed \(session.rssMb.map { "\($0) MB" } ?? "memory")",
+            body: "\(session.displayTitle) was idle. Continue it with \(SessionRelease.resumeCommand(sessionId: session.id))",
+            id: "released-\(session.id)"
         )
     }
 

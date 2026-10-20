@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import os
 import ProfilerBarCore
 
 /// The app's single source of truth: the latest snapshot from the collector,
@@ -35,7 +36,7 @@ final class LiveStore {
     @ObservationIgnored private var openWindowAction: ((String, String?) -> Void)?
     @ObservationIgnored private var watchedProfiles: [String: Int] = [:]
     @ObservationIgnored private var profileRequests: [String: (activityAt: Double, at: Date)] = [:]
-    @ObservationIgnored private var autoReleaser = AutoRelease()
+    @ObservationIgnored private var autoReleaser = AutoReleaser()
 
     /// One store per app. The AppKit delegate needs to reach it from outside
     /// the SwiftUI scene tree, to open the window on reopen and first launch.
@@ -53,6 +54,7 @@ final class LiveStore {
         }
     }
 
+    private static let log = Logger(subsystem: "io.github.softjey.claude-profiler", category: "LiveStore")
     private static let fastRateMs = 1_000
     private static let slowRateMs = 5_000
     /// A busy session re-parses its whole transcript per profile, so a detail
@@ -113,45 +115,41 @@ final class LiveStore {
     /// Ends a live session's process, then asks the collector for a snapshot
     /// right away so the row moves to "Earlier today".
     func release(_ session: LiveSession) {
-        release(session) { result in
+        performRelease(session) { result in
             if case .failure(let failure) = result { Actions.reportReleaseFailure(failure) }
         }
     }
 
-    private func release(
+    private func performRelease(
         _ session: LiveSession,
-        completion: @escaping @MainActor (Result<Void, SessionRelease.Failure>) -> Void
+        onResult: @escaping @MainActor (Result<Void, SessionRelease.Failure>) -> Void
     ) {
         guard let pid = session.pid, session.state.isLive else { return }
         let id = session.id
         Task.detached {
             let result = SessionRelease.release(pid: Int32(pid), sessionId: id)
             await MainActor.run {
-                completion(result)
+                onResult(result)
                 self.collector?.refresh()
             }
         }
     }
 
-    /// The auto-free settings, or nil while the feature is off.
-    private var autoReleasePolicy: AutoRelease.Policy? {
-        let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: SettingsKey.autoFree) else { return nil }
-        return AutoRelease.Policy(
-            idleAfter: defaults.double(forKey: SettingsKey.autoFreeIdleSeconds),
-            minimumMb: defaults.integer(forKey: SettingsKey.autoFreeMinimumMb),
-            scope: AutoRelease.Scope(rawValue: defaults.string(forKey: SettingsKey.autoFreeScope) ?? "") ?? .terminal
+    /// Releases the sessions that sat idle past the Memory settings' threshold.
+    /// A failure gets no modal alert nobody asked for — it is logged, and the
+    /// session just stays.
+    private func releaseIdleSessions(in snapshot: LiveSnapshot) {
+        let due = autoReleaser.sessionsToRelease(
+            in: snapshot,
+            policy: AutoReleaser.Policy(defaults: .standard),
+            watched: Set(watchedProfiles.keys)
         )
-    }
-
-    /// Frees the sessions that have sat idle past the threshold. One whose
-    /// detail window is open stays: someone is looking at it. A failure is
-    /// not worth a modal alert nobody asked for — the session just stays.
-    private func autoRelease(_ next: LiveSnapshot) {
-        let due = autoReleaser.due(in: next, policy: autoReleasePolicy, excluding: Set(watchedProfiles.keys))
         for session in due {
-            release(session) { [notifier] result in
-                if case .success = result { notifier.freed(session) }
+            performRelease(session) { [notifier] result in
+                switch result {
+                case .success: notifier.notifyReleased(session)
+                case .failure(let failure): Self.log.error("Could not release idle session \(session.id, privacy: .public): \(String(describing: failure), privacy: .public)")
+                }
             }
         }
     }
@@ -208,7 +206,7 @@ final class LiveStore {
         case .snapshot(let next):
             notifier.compare(previous: snapshot, next: next)
             refreshWatchedProfiles(for: next)
-            autoRelease(next)
+            releaseIdleSessions(in: next)
             snapshot = next
             status = .running
             restartDelay = 1

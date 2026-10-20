@@ -17,16 +17,25 @@ enum MenuBarStyle: String, CaseIterable, Identifiable {
     }
 }
 
+extension AutoReleaser.Scope {
+    var label: String {
+        switch self {
+        case .cli: "Terminal only"
+        case .all: "All"
+        }
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("menuBarStyle") private var menuBarStyle = MenuBarStyle.tokensAndCount
     @AppStorage(SettingsKey.notifyFinished) private var notifyFinished = true
     @AppStorage(SettingsKey.notifyPermission) private var notifyPermission = true
     @AppStorage(SettingsKey.finishedThresholdSeconds) private var finishedThreshold = 60.0
-    @AppStorage(SettingsKey.autoFree) private var autoFree = false
-    @AppStorage(SettingsKey.autoFreeIdleSeconds) private var autoFreeIdle = 3_600.0
-    @AppStorage(SettingsKey.autoFreeMinimumMb) private var autoFreeMinimumMb = 500
-    @AppStorage(SettingsKey.autoFreeScope) private var autoFreeScope = AutoRelease.Scope.terminal
-    @AppStorage(SettingsKey.notifyAutoFree) private var notifyAutoFree = true
+    @AppStorage(SettingsKey.autoRelease) private var autoRelease = false
+    @AppStorage(SettingsKey.autoReleaseIdleSeconds) private var autoReleaseIdleSeconds = AutoReleaser.Policy.default.minimumIdleDuration
+    @AppStorage(SettingsKey.autoReleaseMinimumRssMb) private var autoReleaseMinimumRssMb = AutoReleaser.Policy.default.minimumRssMb
+    @AppStorage(SettingsKey.autoReleaseScope) private var autoReleaseScope = AutoReleaser.Policy.default.scope
+    @AppStorage(SettingsKey.notifyAutoRelease) private var notifyAutoRelease = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     @Environment(LiveStore.self) private var store
@@ -60,29 +69,24 @@ struct SettingsView: View {
             }
 
             Section("Memory") {
-                Toggle("Free idle sessions automatically", isOn: $autoFree)
-                if autoFree {
-                    Picker("After idle for", selection: $autoFreeIdle) {
-                        Text("30 minutes").tag(1_800.0)
-                        Text("1 hour").tag(3_600.0)
-                        Text("2 hours").tag(7_200.0)
-                        Text("4 hours").tag(14_400.0)
+                Toggle("Free idle sessions automatically", isOn: $autoRelease)
+                if autoRelease {
+                    Picker("After idle for", selection: $autoReleaseIdleSeconds) {
+                        ForEach(AutoReleaser.Policy.idleDurationOptions, id: \.self) { Text(idleLabel($0)).tag($0) }
                     }
-                    Picker("Only if using at least", selection: $autoFreeMinimumMb) {
-                        Text("200 MB").tag(200)
-                        Text("500 MB").tag(500)
-                        Text("1 GB").tag(1_000)
+                    Picker("Only if using at least", selection: $autoReleaseMinimumRssMb) {
+                        ForEach(AutoReleaser.Policy.minimumRssMbOptions, id: \.self) { Text(rssLabel($0)).tag($0) }
                     }
-                    Picker("Sessions", selection: $autoFreeScope) {
-                        Text("Terminal only").tag(AutoRelease.Scope.terminal)
-                        Text("All").tag(AutoRelease.Scope.all)
+                    Picker("Sessions", selection: $autoReleaseScope) {
+                        ForEach(AutoReleaser.Scope.allCases) { Text($0.label).tag($0) }
                     }
-                    Toggle("Notify when a session is freed", isOn: $notifyAutoFree)
+                    Toggle("Notify when a session is freed", isOn: $notifyAutoRelease)
                 }
                 Text("""
-                Does what Free does on a session that sat idle that long: quits its Claude Code \
-                process and keeps the chat, to continue with claude --resume. Idle time counts \
-                while this app runs. Sessions with an open window are kept.
+                Does what Free does once a session has sat idle for a while: quits its Claude Code \
+                process and keeps the chat, to continue with claude --resume. Idle time counts while \
+                this app runs, so turning this on can free sessions that are already idle that long. \
+                Sessions with an open window are kept.
                 """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -101,6 +105,17 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 440)
         .fixedSize()
+    }
+
+    private func idleLabel(_ seconds: TimeInterval) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = [.hour, .minute]
+        return formatter.string(from: seconds) ?? Format.duration(seconds: seconds)
+    }
+
+    private func rssLabel(_ megabytes: Int) -> String {
+        megabytes >= 1_000 ? "\(megabytes / 1_000) GB" : "\(megabytes) MB"
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
