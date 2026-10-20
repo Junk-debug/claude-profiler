@@ -1,3 +1,4 @@
+import ProfilerBarCore
 import ServiceManagement
 import SwiftUI
 
@@ -21,6 +22,11 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.notifyFinished) private var notifyFinished = true
     @AppStorage(SettingsKey.notifyPermission) private var notifyPermission = true
     @AppStorage(SettingsKey.finishedThresholdSeconds) private var finishedThreshold = 60.0
+    @AppStorage(SettingsKey.autoFree) private var autoFree = false
+    @AppStorage(SettingsKey.autoFreeIdleSeconds) private var autoFreeIdle = 3_600.0
+    @AppStorage(SettingsKey.autoFreeMinimumMb) private var autoFreeMinimumMb = 500
+    @AppStorage(SettingsKey.autoFreeScope) private var autoFreeScope = AutoRelease.Scope.terminal
+    @AppStorage(SettingsKey.notifyAutoFree) private var notifyAutoFree = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     @Environment(LiveStore.self) private var store
@@ -51,6 +57,35 @@ struct SettingsView: View {
                 Text("Approval alerts need the profiler hooks: npx claude-profiler install-hooks")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Memory") {
+                Toggle("Free idle sessions automatically", isOn: $autoFree)
+                if autoFree {
+                    Picker("After idle for", selection: $autoFreeIdle) {
+                        Text("30 minutes").tag(1_800.0)
+                        Text("1 hour").tag(3_600.0)
+                        Text("2 hours").tag(7_200.0)
+                        Text("4 hours").tag(14_400.0)
+                    }
+                    Picker("Only if using at least", selection: $autoFreeMinimumMb) {
+                        Text("200 MB").tag(200)
+                        Text("500 MB").tag(500)
+                        Text("1 GB").tag(1_000)
+                    }
+                    Picker("Sessions", selection: $autoFreeScope) {
+                        Text("Terminal only").tag(AutoRelease.Scope.terminal)
+                        Text("All").tag(AutoRelease.Scope.all)
+                    }
+                    Toggle("Notify when a session is freed", isOn: $notifyAutoFree)
+                }
+                Text("""
+                Does what Free does on a session that sat idle that long: quits its Claude Code \
+                process and keeps the chat, to continue with claude --resume. Idle time counts \
+                while this app runs. Sessions with an open window are kept.
+                """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("General") {

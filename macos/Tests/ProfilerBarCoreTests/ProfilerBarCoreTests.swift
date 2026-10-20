@@ -223,3 +223,101 @@ private let snapshotLine = #"""
     #expect(chain.count >= 2)
     #expect(ChatLocation.parent(of: me) == getppid())
 }
+
+private func snapshot(_ sessions: [String]) throws -> LiveSnapshot {
+    let line = #"{"v":1,"type":"snapshot","at":1,"hooksInstalled":true,"today":{"tokens":0,"sessions":0,"costUsd":null},"sessions":["#
+        + sessions.joined(separator: ",") + "]}"
+    guard case .snapshot(let snapshot) = try #require(LiveMessage.decode(Data(line.utf8))) else {
+        throw CocoaError(.coderReadCorrupt)
+    }
+    return snapshot
+}
+
+private func session(
+    id: String = "s",
+    state: String = "idle",
+    source: String = "cli",
+    pid: Int = 100,
+    cpu: Double? = 0.3,
+    rss: Int? = 800
+) -> String {
+    let cpu = cpu.map { "\($0)" } ?? "null"
+    let rss = rss.map { "\($0)" } ?? "null"
+    return #"{"id":"\#(id)","title":null,"cwd":null,"source":"\#(source)","state":"\#(state)","pid":\#(pid),"#
+        + #""startedAt":1,"lastActivityAt":1,"model":null,"tokens":{"input":0,"output":0,"cacheRead":0,"cacheCreate":0},"#
+        + #""tokensToday":0,"contextTokens":null,"costUsd":null,"subagents":0,"cpuPct":\#(cpu),"rssMb":\#(rss),"#
+        + #""activity":null,"burn":[],"transcriptPath":null}"#
+}
+
+private let hourPolicy = AutoRelease.Policy(idleAfter: 3_600, minimumMb: 500, scope: .terminal)
+
+@Test func autoReleaseFreesASessionOnceItHasBeenIdleLongEnough() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let idle = try snapshot([session()])
+
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(3_599)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(3_600)).map(\.id) == ["s"])
+    // Handed out once: a release that failed is not retried every snapshot.
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(4_000)).isEmpty)
+}
+
+@Test func autoReleaseRestartsTheIdleClockWhenTheSessionWorks() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let idle = try snapshot([session()])
+
+    _ = auto.due(in: idle, policy: hourPolicy, now: start)
+    _ = auto.due(in: try snapshot([session(state: "busy")]), policy: hourPolicy, now: start.addingTimeInterval(1_800))
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(3_600)).isEmpty)
+    // A background task keeps an idle prompt's process tree busy.
+    _ = auto.due(in: try snapshot([session(cpu: 40)]), policy: hourPolicy, now: start.addingTimeInterval(4_000))
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(7_000)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(10_599)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(10_600)).map(\.id) == ["s"])
+}
+
+@Test func autoReleaseCountsIdleTimeEvenWhileOff() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let idle = try snapshot([session()])
+
+    #expect(auto.due(in: idle, policy: nil, now: start).isEmpty)
+    #expect(auto.due(in: idle, policy: nil, now: start.addingTimeInterval(7_200)).isEmpty)
+    #expect(auto.due(in: idle, policy: hourPolicy, now: start.addingTimeInterval(7_201)).map(\.id) == ["s"])
+}
+
+@Test func autoReleaseSkipsWhatShouldStay() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let sessions = try snapshot([
+        session(id: "small", rss: 120),
+        session(id: "unmeasured", cpu: nil, rss: nil),
+        session(id: "editor", source: "vscode", pid: 101),
+        session(id: "watched", pid: 102),
+        session(id: "waiting", state: "waiting", pid: 103),
+        session(id: "big", pid: 104),
+    ])
+
+    _ = auto.due(in: sessions, policy: hourPolicy, excluding: ["watched"], now: start)
+    let due = auto.due(in: sessions, policy: hourPolicy, excluding: ["watched"], now: start.addingTimeInterval(3_600))
+    #expect(due.map(\.id) == ["big"])
+
+    var all = AutoRelease()
+    let anySource = AutoRelease.Policy(idleAfter: 3_600, minimumMb: 500, scope: .all)
+    _ = all.due(in: sessions, policy: anySource, now: start)
+    #expect(all.due(in: sessions, policy: anySource, now: start.addingTimeInterval(3_600)).map(\.id) == ["editor", "watched", "big"])
+}
+
+@Test func autoReleaseTreatsAResumedSessionAsNew() throws {
+    var auto = AutoRelease()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+
+    _ = auto.due(in: try snapshot([session(pid: 100)]), policy: hourPolicy, now: start)
+    #expect(auto.due(in: try snapshot([session(pid: 100)]), policy: hourPolicy, now: start.addingTimeInterval(3_600)).count == 1)
+    // `claude --resume` brings the same id back in a new process.
+    let resumed = try snapshot([session(pid: 200)])
+    #expect(auto.due(in: resumed, policy: hourPolicy, now: start.addingTimeInterval(4_000)).isEmpty)
+    #expect(auto.due(in: resumed, policy: hourPolicy, now: start.addingTimeInterval(7_600)).count == 1)
+}

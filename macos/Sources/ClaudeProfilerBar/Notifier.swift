@@ -6,11 +6,17 @@ enum SettingsKey {
     static let notifyFinished = "notifyFinished"
     static let notifyPermission = "notifyPermission"
     static let finishedThresholdSeconds = "finishedThresholdSeconds"
+    static let autoFree = "autoFree"
+    static let autoFreeIdleSeconds = "autoFreeIdleSeconds"
+    static let autoFreeMinimumMb = "autoFreeMinimumMb"
+    static let autoFreeScope = "autoFreeScope"
+    static let notifyAutoFree = "notifyAutoFree"
 }
 
 /// Turns state transitions between two snapshots into user notifications:
 /// a long busy stretch that just ended ("Claude finished"), and a session
-/// that started waiting on a permission prompt.
+/// that started waiting on a permission prompt. Also says when a session
+/// was freed on its own, since nobody clicked anything to expect it.
 @MainActor
 final class Notifier {
     private var busySince: [String: Date] = [:]
@@ -24,6 +30,11 @@ final class Notifier {
             SettingsKey.notifyFinished: true,
             SettingsKey.notifyPermission: true,
             SettingsKey.finishedThresholdSeconds: 60.0,
+            SettingsKey.autoFree: false,
+            SettingsKey.autoFreeIdleSeconds: 3_600.0,
+            SettingsKey.autoFreeMinimumMb: 500,
+            SettingsKey.autoFreeScope: AutoRelease.Scope.terminal.rawValue,
+            SettingsKey.notifyAutoFree: true,
         ])
     }
 
@@ -61,6 +72,16 @@ final class Notifier {
 
         let alive = Set(next.sessions.map(\.id))
         busySince = busySince.filter { alive.contains($0.key) }
+    }
+
+    func freed(_ session: LiveSession) {
+        guard UserDefaults.standard.bool(forKey: SettingsKey.notifyAutoFree) else { return }
+        let memory = session.rssMb.map { "\($0) MB" } ?? "memory"
+        post(
+            title: "Freed \(memory)",
+            body: "\(session.displayTitle) was idle. Continue it with claude --resume.",
+            id: "freed-\(session.id)"
+        )
     }
 
     private func post(title: String, body: String, id: String) {
